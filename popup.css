@@ -113,6 +113,15 @@ header p {
     background: #27ae60;
 }
 
+.status-dot.loading {
+    background: #f39c12;
+    animation: pulse 1.5s infinite;
+}
+
+.status-dot.error {
+    background: #e74c3c;
+}
+
 .status-text {
     font-size: 12px;
     color: #7f8c8d;
@@ -149,6 +158,67 @@ header p {
     font-size: 11px !important;
 }
 
+.results-section {
+    margin-bottom: 15px;
+}
+
+.results-section h3 {
+    color: #34495e;
+    font-size: 14px;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.results-container {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 4px solid #27ae60;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 12px;
+    color: #2c3e50;
+}
+
+.results-summary {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.results-summary p {
+    margin-bottom: 4px;
+    font-size: 11px;
+}
+
+.listings-preview {
+    margin-top: 10px;
+}
+
+.listing-item {
+    background: white;
+    padding: 8px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+    font-size: 11px;
+}
+
+.listing-item strong {
+    color: #2c3e50;
+    font-size: 12px;
+}
+
+.listing-item .price {
+    color: #27ae60;
+    font-weight: 600;
+}
+
+.listing-item .location {
+    color: #7f8c8d;
+    font-size: 10px;
+}
+
 footer {
     text-align: center;
     padding-top: 15px;
@@ -168,4 +238,23 @@ footer p {
 
 .loading {
     animation: pulse 1.5s infinite;
-} 
+}
+
+/* Scrollbar styling for results container */
+.results-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.results-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.results-container::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.results-container::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}

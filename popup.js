@@ -1,19 +1,28 @@
-// Popup script for Chrome extension
+// Marketplace Scraper Popup Script
 document.addEventListener('DOMContentLoaded', function() {
     // Get DOM elements
-    const actionBtn = document.getElementById('actionBtn');
-    const settingsBtn = document.getElementById('settingsBtn');
+    const scrapeListingsBtn = document.getElementById('scrapeListingsBtn');
+    const scrapeSingleBtn = document.getElementById('scrapeSingleBtn');
+    const highlightPricesBtn = document.getElementById('highlightPricesBtn');
+    const exportBtn = document.getElementById('exportBtn');
     const pageTitle = document.getElementById('pageTitle');
     const pageUrl = document.getElementById('pageUrl');
     const statusDot = document.querySelector('.status-dot');
     const statusText = document.querySelector('.status-text');
+    const resultsSection = document.getElementById('resultsSection');
+    const results = document.getElementById('results');
+
+    // Store scraped data
+    let scrapedData = null;
 
     // Initialize popup
     initializePopup();
 
     // Event listeners
-    actionBtn.addEventListener('click', performAction);
-    settingsBtn.addEventListener('click', openSettings);
+    scrapeListingsBtn.addEventListener('click', scrapeListings);
+    scrapeSingleBtn.addEventListener('click', scrapeSingleListing);
+    highlightPricesBtn.addEventListener('click', highlightPrices);
+    exportBtn.addEventListener('click', exportData);
 
     async function initializePopup() {
         try {
@@ -23,11 +32,17 @@ document.addEventListener('DOMContentLoaded', function() {
             if (tab) {
                 pageTitle.textContent = tab.title || 'No title';
                 pageUrl.textContent = tab.url || 'No URL';
+                
+                // Check if we're on Facebook Marketplace
+                if (tab.url && tab.url.includes('facebook.com/marketplace')) {
+                    statusText.textContent = 'Marketplace Detected';
+                    statusDot.classList.add('active');
+                } else {
+                    statusText.textContent = 'Not on Marketplace';
+                    statusDot.classList.remove('active');
+                }
             }
 
-            // Load extension status
-            loadExtensionStatus();
-            
         } catch (error) {
             console.error('Error initializing popup:', error);
             pageTitle.textContent = 'Error loading page info';
@@ -35,67 +50,165 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    async function performAction() {
+    async function scrapeListings() {
         try {
+            updateStatus('Scraping listings...', 'loading');
+            
             // Get current active tab
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             
             if (tab) {
                 // Send message to content script
-                await chrome.tabs.sendMessage(tab.id, {
-                    action: 'performAction',
-                    data: { timestamp: Date.now() }
+                const response = await chrome.tabs.sendMessage(tab.id, {
+                    action: 'scrapeListings'
                 });
 
-                // Show success feedback
-                actionBtn.textContent = 'Action Performed!';
-                actionBtn.style.background = 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)';
-                
-                setTimeout(() => {
-                    actionBtn.textContent = 'Perform Action';
-                    actionBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-                }, 2000);
+                if (response && response.listings) {
+                    scrapedData = response;
+                    displayResults(response);
+                    updateStatus(`Scraped ${response.listings.length} listings`, 'success');
+                } else {
+                    updateStatus('No listings found', 'error');
+                }
             }
         } catch (error) {
-            console.error('Error performing action:', error);
-            actionBtn.textContent = 'Error!';
-            actionBtn.style.background = 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)';
-            
-            setTimeout(() => {
-                actionBtn.textContent = 'Perform Action';
-                actionBtn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-            }, 2000);
+            console.error('Error scraping listings:', error);
+            updateStatus('Error scraping listings', 'error');
         }
     }
 
-    function openSettings() {
-        // Open settings page or show settings modal
-        chrome.runtime.openOptionsPage();
-    }
-
-    async function loadExtensionStatus() {
+    async function scrapeSingleListing() {
         try {
-            // Check if extension is active
-            const status = await chrome.storage.local.get(['extensionStatus']);
-            const isActive = status.extensionStatus !== false; // Default to true
+            updateStatus('Scraping single listing...', 'loading');
             
-            if (isActive) {
-                statusDot.classList.add('active');
-                statusText.textContent = 'Active';
-            } else {
-                statusDot.classList.remove('active');
-                statusText.textContent = 'Inactive';
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            
+            if (tab) {
+                const response = await chrome.tabs.sendMessage(tab.id, {
+                    action: 'scrapeSingleListing'
+                });
+
+                if (response) {
+                    scrapedData = response;
+                    displayResults(response);
+                    updateStatus('Single listing scraped', 'success');
+                } else {
+                    updateStatus('Not on a listing page', 'error');
+                }
             }
         } catch (error) {
-            console.error('Error loading status:', error);
-            statusText.textContent = 'Error';
+            console.error('Error scraping single listing:', error);
+            updateStatus('Error scraping listing', 'error');
+        }
+    }
+
+    async function highlightPrices() {
+        try {
+            updateStatus('Highlighting prices...', 'loading');
+            
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            
+            if (tab) {
+                await chrome.tabs.sendMessage(tab.id, {
+                    action: 'highlightPrices'
+                });
+                
+                updateStatus('Prices highlighted', 'success');
+            }
+        } catch (error) {
+            console.error('Error highlighting prices:', error);
+            updateStatus('Error highlighting prices', 'error');
+        }
+    }
+
+    function displayResults(data) {
+        resultsSection.style.display = 'block';
+        
+        if (data.listings) {
+            // Multiple listings
+            const html = `
+                <div class="results-summary">
+                    <p><strong>Scraped ${data.listings.length} listings</strong></p>
+                    <p>URL: ${data.url}</p>
+                    <p>Timestamp: ${new Date(data.timestamp).toLocaleString()}</p>
+                </div>
+                <div class="listings-preview">
+                    ${data.listings.slice(0, 3).map(listing => `
+                        <div class="listing-item">
+                            <strong>${listing.title || 'No title'}</strong><br>
+                            <span class="price">${listing.price || 'No price'}</span><br>
+                            <span class="location">${listing.location || 'No location'}</span>
+                        </div>
+                    `).join('')}
+                    ${data.listings.length > 3 ? `<p>... and ${data.listings.length - 3} more</p>` : ''}
+                </div>
+            `;
+            results.innerHTML = html;
+        } else if (data.title) {
+            // Single listing
+            const html = `
+                <div class="results-summary">
+                    <p><strong>Single Listing Scraped</strong></p>
+                    <p>Title: ${data.title}</p>
+                    <p>Price: ${data.price || 'No price'}</p>
+                    <p>Location: ${data.location || 'No location'}</p>
+                    <p>Seller: ${data.seller || 'No seller info'}</p>
+                    <p>Images: ${data.images ? data.images.length : 0}</p>
+                </div>
+            `;
+            results.innerHTML = html;
+        }
+    }
+
+    function exportData() {
+        if (!scrapedData) {
+            updateStatus('No data to export', 'error');
+            return;
+        }
+
+        try {
+            const dataStr = JSON.stringify(scrapedData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `marketplace-data-${Date.now()}.json`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            updateStatus('Data exported successfully', 'success');
+        } catch (error) {
+            console.error('Error exporting data:', error);
+            updateStatus('Error exporting data', 'error');
+        }
+    }
+
+    function updateStatus(message, type) {
+        statusText.textContent = message;
+        
+        // Update status dot color
+        statusDot.classList.remove('active', 'loading', 'error');
+        
+        switch (type) {
+            case 'success':
+                statusDot.classList.add('active');
+                break;
+            case 'loading':
+                statusDot.classList.add('loading');
+                break;
+            case 'error':
+                statusDot.classList.add('error');
+                break;
+            default:
+                statusDot.classList.add('active');
         }
     }
 
     // Listen for messages from background script
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.type === 'statusUpdate') {
-            loadExtensionStatus();
+            updateStatus(message.status, 'success');
         }
     });
-}); 
+});
