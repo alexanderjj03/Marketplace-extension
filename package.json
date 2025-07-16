@@ -1,14 +1,33 @@
 {
-  "name": "facebook",
+  "name": "my-chrome-extension",
   "version": "1.0.0",
-  "description": "Marketplace extension",
-  "main": "index.js",
+  "description": "A powerful Chrome extension built with Manifest V3",
+  "main": "background.js",
   "scripts": {
-    "test": "placeholder"
+    "build": "echo 'No build step required for Chrome extensions'",
+    "dev": "echo 'Load extension in Chrome developer mode'",
+    "test": "echo 'No tests specified'",
+    "lint": "echo 'No linter configured'",
+    "zip": "powershell Compress-Archive -Path . -DestinationPath ../chrome-extension.zip -Force"
   },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "canvas": "^3.1.2"
-  }
+  "keywords": [
+    "chrome-extension",
+    "manifest-v3",
+    "browser-extension",
+    "javascript"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "prettier": "^2.8.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/my-chrome-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/my-chrome-extension/issues"
+  },
+  "homepage": "https://github.com/yourusername/my-chrome-extension#readme"
 }
