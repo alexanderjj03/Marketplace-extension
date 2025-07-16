@@ -1,0 +1,14 @@
+{
+  "name": "facebook",
+  "version": "1.0.0",
+  "description": "Marketplace extension",
+  "main": "index.js",
+  "scripts": {
+    "test": "placeholder"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "canvas": "^3.1.2"
+  }
+}

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Marketplace Analyzer</title>
+    <style>
+        body {
+            width: 300px;
+            padding: 15px;
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+        }
+        h1 {
+            color: #1877f2;
+            font-size: 18px;
+            margin-top: 0;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+        }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+            margin-right: 10px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #1877f2;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        button {
+            background-color: #1877f2;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #166fe5;
+        }
+        .stats {
+            margin-top: 15px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<h1>Marketplace Analyzer</h1>
+
+<div class="toggle-container">
+    <label class="switch">
+        <input type="checkbox" id="extensionToggle" checked>
+        <span class="slider"></span>
+    </label>
+    <span>Extension Active</span>
+</div>
+
+<button id="refreshAnalysis">Refresh Analysis</button>
+
+<div class="stats">
+    <p>Last scan: <span id="lastScanTime">Never</span></p>
+    <p>Listings analyzed: <span id="listingsCount">0</span></p>
+    <p>Potential scams: <span id="scamsCount">0</span></p>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
