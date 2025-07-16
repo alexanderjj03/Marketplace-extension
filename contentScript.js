@@ -192,7 +192,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         overlayVisible ? 'block' : 'none';
   }
 
-  if (request.action === 'REFRESH_ANALYSIS') {
+  if (request.action === 'performAction') {
     analyzeListings();
     // Save scan time
     chrome.storage.sync.set({

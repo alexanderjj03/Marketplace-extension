@@ -1,35 +1,32 @@
 {
   "manifest_version": 3,
-  "name": "My Chrome Extension",
+  "name": "Marketplace analyzer",
   "version": "1.0.0",
-  "description": "A powerful Chrome extension for enhancing your browsing experience",
+  "description": "Analyzes Facebook Marketplace listings for deals and scams",
   "permissions": [
     "activeTab",
     "storage"
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "My Extension"
+    "default_title": "My Extension",
+    "default_icon": "icons/icon48.png"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": ["*://www.facebook.com/marketplace*"],
+      "js": ["contentScript.js"],
+      "css": ["overlay.css"],
       "run_at": "document_end"
     }
   ],
-  "background": {
-    "service_worker": "background.js"
-  },
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["styles.css"],
-      "matches": ["<all_urls>"]
-    }
-  ]
+  "web_accessible_resources": [{
+    "resources": ["overlay.html"],
+    "matches": ["*://www.facebook.com/*"]
+  }]
 } 
