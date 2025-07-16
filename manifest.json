@@ -1,19 +1,27 @@
 {
   "manifest_version": 3,
-  "name": "My Chrome Extension",
+  "name": "Marketplace Scraper",
   "version": "1.0.0",
-  "description": "A powerful Chrome extension for enhancing your browsing experience",
+  "description": "Extract data from Facebook Marketplace listings",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://facebook.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "My Extension"
+    "default_title": "Marketplace Scraper"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "https://www.facebook.com/marketplace/*",
+        "https://facebook.com/marketplace/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_end"
     }
@@ -28,8 +36,8 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["styles.css"],
-      "matches": ["<all_urls>"]
+      "resources": ["popup.css"],
+      "matches": ["https://www.facebook.com/*", "https://facebook.com/*"]
     }
   ]
-} 
+}
