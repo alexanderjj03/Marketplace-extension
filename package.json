@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "A powerful Chrome extension built with Manifest V3",
   "main": "background.js",
+  "type": "module",
   "scripts": {
-    "build": "echo 'No build step required for Chrome extensions'",
+    "build": "rollup -c",
     "dev": "echo 'Load extension in Chrome developer mode'",
     "test": "echo 'No tests specified'",
     "lint": "echo 'No linter configured'",
@@ -19,8 +20,13 @@
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@types/chrome": "^0.1.1",
     "eslint": "^8.0.0",
-    "prettier": "^2.8.0"
+    "prettier": "^2.8.0",
+    "rollup": "^4.46.2"
   },
   "repository": {
     "type": "git",
