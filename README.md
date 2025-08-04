@@ -1,4 +1,4 @@
-# My Chrome Extension
+# My Chrome Extension (WORK IN PROGRESS)
 
 A powerful and modern Chrome extension built with Manifest V3 that enhances your browsing experience.
 
