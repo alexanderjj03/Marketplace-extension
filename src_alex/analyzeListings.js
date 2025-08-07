@@ -39,7 +39,7 @@ export function analyzeListings(currentKeyword, config) {
     }
 
     // Only process if matches keyword (if any)
-    if (currentKeyword && !title.includes(currentKeyword)) {
+    if (currentKeyword && !title.includes(currentKeyword)) { // something wrong with this
       resetListingStyle(listing);
     } else {
       listingsData.push({ "price": price, "title": title, "other": other, "element": listing });

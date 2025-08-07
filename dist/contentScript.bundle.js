@@ -42,7 +42,7 @@
       }
 
       // Only process if matches keyword (if any)
-      if (currentKeyword && !title.includes(currentKeyword)) {
+      if (currentKeyword && !title.includes(currentKeyword)) { // something wrong with this
         resetListingStyle(listing);
       } else {
         listingsData.push({ "price": price, "title": title, "other": other, "element": listing });
@@ -204,7 +204,7 @@
       const side = document.querySelector('[aria-label="Marketplace sidebar"]');
       const search = side.querySelector('input[aria-label="Search Marketplace"]');
       if (search.value) { // and searchbar thing (eventually)
-        currentKeyword = search.value;
+        currentKeyword = search.value.toString().toLowerCase();
       } else {
         sendResponse({
           success: true,

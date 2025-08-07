@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     action: 'scrapeListings'
                 });
 
-                if (response && response.data) {
+                if (response) {
                     if (response.data) {
                         scrapedData = response.data;
                         //displayResults(scrapedData);
