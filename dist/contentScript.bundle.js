@@ -24,37 +24,35 @@
     let listingsData = [];
 
     // Get all listing elements
-    const collection = document.querySelectorAll('[aria-label="Collection of Marketplace items"]');
-    if (collection.length < 1) return;
-    const col = collection[0];
+    const col = document.querySelector('[aria-label="Collection of Marketplace items"]');
     const listings = col.querySelectorAll('[data-virtualized="false"]');
-    console.log(listings.length);
 
     // Extract data from each listing
     listings.forEach((listing) => {
-      const titleElement = listing.querySelector('[dir="auto"]');
-      const priceElement = listing.querySelector('span[dir="auto"]:last-child');
+      const details = listing.querySelectorAll('[dir="auto"]');
 
-      if (!titleElement || !priceElement) return;
+      if (details.length < 3) return;
 
-      const title = titleElement.textContent.toLowerCase();
-      const priceText = priceElement.textContent.replace(/[^0-9.]/g, '');
-      const price = parseFloat(priceText) || 0;
+      let price = details[0].textContent.replace(/[^0-9.]/g, '');
+      price = parseFloat(price) || 0;
+      const title = details[1].textContent.toLowerCase();
+      let other = "";
+      if (details.length > 3) {
+        other = details[3].textContent.toLowerCase();
+      }
 
       // Only process if matches keyword (if any)
       if (currentKeyword && !title.includes(currentKeyword)) {
         resetListingStyle(listing);
-        return;
+      } else {
+        listingsData.push({ "price": price, "title": title, "other": other, "element": listing });
       }
-
-      listingsData.push({ title, price, element: listing });
     });
-
     // Analyze prices if we have enough data
     if (listingsData.length >= 3) {
       analyzePrices(listingsData, config);
     }
-
+    console.log(listingsData);
     // Check for potential scams
     detectPotentialScams(listingsData, config);
     return listingsData;
@@ -62,14 +60,17 @@
 
   // Analyze pricing data
   function analyzePrices(listingsData, config) {
+    // Yeah this will take some work. If there's a year in the title, calculate effective price (older --> less value)
     const prices = listingsData.map(item => item.price).filter(p => p > config.minPriceForAnalysis);
     if (prices.length < 3) return;
 
     const averagePrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
-    Math.sqrt(
+    /*
+    const stdDev = Math.sqrt(
         prices.map(price => Math.pow(price - averagePrice, 2))
             .reduce((sum, diff) => sum + diff, 0) / prices.length
     );
+    */
 
     listingsData.forEach(item => {
       if (item.price < config.minPriceForAnalysis) return;
@@ -138,13 +139,14 @@
     },
     priceDeviationThreshold: 0.3, // 30% below average is good deal
     scamKeywords: ['urgent', 'must sell', 'cash only', 'no returns'],
-    minPriceForAnalysis: 10 // Don't analyze items below this price
+    minPriceForAnalysis: 50 // Don't analyze items below this price
   };
 
   // State
   let currentKeyword = '';
   let listingsData = [];
   let overlayVisible = true;
+  let observerActive = false;
 
   // Initialize the overlay
   function initOverlay() {
@@ -198,20 +200,35 @@
     }
 
     if (request.action === 'scrapeListings') {
+
+      const side = document.querySelector('[aria-label="Marketplace sidebar"]');
+      const search = side.querySelector('input[aria-label="Search Marketplace"]');
+      if (search.value) { // and searchbar thing (eventually)
+        currentKeyword = search.value;
+      } else {
+        sendResponse({
+          success: true,
+          homepage: true
+        });
+        return true;
+      }
+
+
       listingsData = analyzeListings(currentKeyword, config);
-      observeListings(currentKeyword, config);
+      if (!observerActive) {
+        observeListings(currentKeyword, config);
+        console.log("f");
+        observerActive = true;
+      }
       // Save scan time
-      chrome.storage.sync.set({
-        lastScan: Date.now(),
-        stats: {
-          total: listingsData.length,
-          scams: listingsData.filter(item =>
-              config.scamKeywords.some(kw => item.title.includes(kw)) ||
-              isSuspiciousPrice(item.price, item.title)
-                  .length)
-        }
+
+      sendResponse({
+        success: true,
+        data: listingsData,
+        count: listingsData.length
       });
-    }
+      return true;
+    } // NEXT: work on scraping an individual listing page.
   });
 
 })();

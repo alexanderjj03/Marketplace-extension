@@ -9,13 +9,14 @@ const config = {
   },
   priceDeviationThreshold: 0.3, // 30% below average is good deal
   scamKeywords: ['urgent', 'must sell', 'cash only', 'no returns'],
-  minPriceForAnalysis: 10 // Don't analyze items below this price
+  minPriceForAnalysis: 50 // Don't analyze items below this price
 };
 
 // State
 let currentKeyword = '';
 let listingsData = [];
 let overlayVisible = true;
+let observerActive = false;
 
 // Initialize the overlay
 function initOverlay() {
@@ -69,18 +70,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'scrapeListings') {
+
+    const side = document.querySelector('[aria-label="Marketplace sidebar"]');
+    const search = side.querySelector('input[aria-label="Search Marketplace"]');
+    if (search.value) { // and searchbar thing (eventually)
+      currentKeyword = search.value;
+    } else {
+      sendResponse({
+        success: true,
+        homepage: true
+      });
+      return true;
+    }
+
+
     listingsData = analyzeListings(currentKeyword, config);
-    observeListings(currentKeyword, config);
+    if (!observerActive) {
+      observeListings(currentKeyword, config);
+      console.log("f");
+      observerActive = true;
+    }
     // Save scan time
-    chrome.storage.sync.set({
-      lastScan: Date.now(),
-      stats: {
-        total: listingsData.length,
-        scams: listingsData.filter(item =>
-            config.scamKeywords.some(kw => item.title.includes(kw)) ||
-            isSuspiciousPrice(item.price, item.title)
-                .length)
-      }
+
+    sendResponse({
+      success: true,
+      data: listingsData,
+      count: listingsData.length
     });
-  }
+    return true;
+  } // NEXT: work on scraping an individual listing page.
 });

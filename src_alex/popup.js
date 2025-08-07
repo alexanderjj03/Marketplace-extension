@@ -63,10 +63,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     action: 'scrapeListings'
                 });
 
-                if (response && response.listings) {
-                    scrapedData = response;
-                    displayResults(response);
-                    updateStatus(`Scraped ${response.listings.length} listings`, 'success');
+                if (response && response.data) {
+                    if (response.data) {
+                        scrapedData = response.data;
+                        //displayResults(scrapedData);
+                        updateStatus(`Scraped ${response.count} listings`, 'success');
+                    } else if (response.homepage) {
+                        updateStatus('Please search for an item', 'error');
+                    }
                 } else {
                     updateStatus('No listings found', 'error');
                 }
