@@ -73,8 +73,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     const side = document.querySelector('[aria-label="Marketplace sidebar"]');
     const search = side.querySelector('input[aria-label="Search Marketplace"]');
-    if (search.value) { // and searchbar thing (eventually)
-      currentKeyword = search.value.toString().toLowerCase();
+    if (search.value.toString().trim()) { // grabs searchbar value
+      currentKeyword = search.value.toString().trim().toLowerCase();
     } else {
       sendResponse({
         success: true,

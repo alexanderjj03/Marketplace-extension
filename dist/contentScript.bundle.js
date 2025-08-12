@@ -18,7 +18,8 @@
   }
 
 
-  // Main analysis function
+  // Main analysis function. THIS IS GOOD NOW
+  // REQUIRES: currentKeyword isn't null
   function analyzeListings(currentKeyword, config) {
     // Clear previous data
     let listingsData = [];
@@ -26,27 +27,36 @@
     // Get all listing elements
     const col = document.querySelector('[aria-label="Collection of Marketplace items"]');
     const listings = col.querySelectorAll('[data-virtualized="false"]');
+    console.log(listings.length);
 
     // Extract data from each listing
     listings.forEach((listing) => {
       const details = listing.querySelectorAll('[dir="auto"]');
+      let contents = [];
+      details.forEach((detail) => contents.push(detail.textContent.toLowerCase()));
 
-      if (details.length < 3) return;
+      let idx = 0;
+      while ((contents[idx] === "just listed") || ((parseFloat(contents[idx].replace(/[^0-9.]/g, '')) || 0) === 0)) {
+        idx += 1;
+        if (idx >= contents.length) {
+          return;
+        }
+      } // iter through contents until the price is found
 
-      let price = details[0].textContent.replace(/[^0-9.]/g, '');
-      price = parseFloat(price) || 0;
-      const title = details[1].textContent.toLowerCase();
+      let price = parseFloat(contents[idx].replace(/[^0-9.]/g, '')) || 0;
+      if (!contents[idx + 1].includes(currentKeyword)) {
+        idx += 1;
+        if (!contents[idx + 1].includes(currentKeyword)) {
+          resetListingStyle(listing);
+          return;
+        }
+      }
+      const title = contents[idx + 1];
       let other = "";
-      if (details.length > 3) {
-        other = details[3].textContent.toLowerCase();
+      if (idx + 3 < contents.length) {
+        other = contents[idx + 3];
       }
-
-      // Only process if matches keyword (if any)
-      if (currentKeyword && !title.includes(currentKeyword)) { // something wrong with this
-        resetListingStyle(listing);
-      } else {
-        listingsData.push({ "price": price, "title": title, "other": other, "element": listing });
-      }
+      listingsData.push({ "price": price, "title": title, "other": other, "element": listing });
     });
     // Analyze prices if we have enough data
     if (listingsData.length >= 3) {
@@ -58,7 +68,7 @@
     return listingsData;
   }
 
-  // Analyze pricing data
+  // Analyze pricing data. WORK ON THIS NEXT
   function analyzePrices(listingsData, config) {
     // Yeah this will take some work. If there's a year in the title, calculate effective price (older --> less value)
     const prices = listingsData.map(item => item.price).filter(p => p > config.minPriceForAnalysis);
@@ -203,8 +213,8 @@
 
       const side = document.querySelector('[aria-label="Marketplace sidebar"]');
       const search = side.querySelector('input[aria-label="Search Marketplace"]');
-      if (search.value) { // and searchbar thing (eventually)
-        currentKeyword = search.value.toString().toLowerCase();
+      if (search.value.toString().trim()) { // grabs searchbar value
+        currentKeyword = search.value.toString().trim().toLowerCase();
       } else {
         sendResponse({
           success: true,

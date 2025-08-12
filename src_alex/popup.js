@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    async function scrapeSingleListing() {
+    async function scrapeSingleListing() { // This is gonna suck
         try {
             updateStatus('Scraping single listing...', 'loading');
             
