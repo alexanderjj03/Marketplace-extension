@@ -1,6 +1,6 @@
-# My Chrome Extension (WORK IN PROGRESS)
+# Facebook maretplace price checker/potential scam detector (WORK IN PROGRESS)
 
-A powerful and modern Chrome extension built with Manifest V3 that enhances your browsing experience.
+We expect to have version 1.0.0, containing the extension's most essential features, working by the end of August, 2025. 
 
 ## Features
 
