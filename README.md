@@ -1,6 +1,10 @@
 # Facebook maretplace price checker/potential scam detector (WORK IN PROGRESS)
 
-We expect to have version 1.0.0, containing the extension's most essential features, working by the end of August, 2025. 
+We expect to have version 1.0.0, containing the extension's most essential features, working by the end of August, 2025.
+
+Ignore everything below this point. We will add documentation for how to use our extension.
+
+=================================================================================================================
 
 ## Features
 
