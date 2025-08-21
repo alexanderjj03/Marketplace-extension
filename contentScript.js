@@ -1,5 +1,6 @@
 // Configuration
 import {isSuspiciousPrice, analyzeListings, observeListings} from "./src_alex/analyzeListings.js";
+import {analyzeSingleListing} from "./src_alex/analyzeSingleListing.js";
 
 const config = {
   highlightColors: {
@@ -15,6 +16,7 @@ const config = {
 // State
 let currentKeyword = '';
 let listingsData = [];
+let listingResult = '';
 let overlayVisible = true;
 let observerActive = false;
 
@@ -69,25 +71,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         overlayVisible ? 'block' : 'none';
   }
 
-  if (request.action === 'scrapeListings') {
+  if (request.action === 'scrapeListings') { // Requires: An item has been searched for
 
     const side = document.querySelector('[aria-label="Marketplace sidebar"]');
     const search = side.querySelector('input[aria-label="Search Marketplace"]');
-    if (search.value.toString().trim()) { // grabs searchbar value
-      currentKeyword = search.value.toString().trim().toLowerCase();
-    } else {
-      sendResponse({
-        success: true,
-        homepage: true
-      });
-      return true;
-    }
 
+    currentKeyword = search.value.toString().trim().toLowerCase(); // should never be null
 
     listingsData = analyzeListings(currentKeyword, config);
     if (!observerActive) {
       observeListings(currentKeyword, config);
-      console.log("f");
       observerActive = true;
     }
     // Save scan time
@@ -99,4 +92,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true;
   } // NEXT: work on scraping an individual listing page.
+
+  if (request.action === 'scrapeSingleListing') {
+    listingResult = analyzeSingleListing(config);
+
+    sendResponse({
+      success: true,
+      data: listingResult,
+    });
+    return true;
+  }
 });

@@ -52,12 +52,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function scrapeListings() {
         try {
-            updateStatus('Scraping listings...', 'loading');
+            updateStatus('Analyzing listings...', 'loading');
             
             // Get current active tab
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             
-            if (tab) {
+            if (tab && tab.url.includes("/search")) {
                 // Send message to content script
                 const response = await chrome.tabs.sendMessage(tab.id, {
                     action: 'scrapeListings'
@@ -68,12 +68,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         scrapedData = response.data;
                         //displayResults(scrapedData);
                         updateStatus(`Scraped ${response.count} listings`, 'success');
-                    } else if (response.homepage) {
-                        updateStatus('Please search for an item', 'error');
                     }
                 } else {
                     updateStatus('No listings found', 'error');
                 }
+            } else if (tab.url.includes("/item/")) {
+                updateStatus('Please select the "Scrape Single Item" button instead', 'error');
+            } else {
+                updateStatus('Please search for an item', 'error');
             }
         } catch (error) {
             console.error('Error scraping listings:', error);
@@ -83,22 +85,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function scrapeSingleListing() { // This is gonna suck
         try {
-            updateStatus('Scraping single listing...', 'loading');
+            updateStatus('Analyzing single listing...', 'loading');
             
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
             
-            if (tab) {
+            if (tab && tab.url.includes("/item/")) {
                 const response = await chrome.tabs.sendMessage(tab.id, {
                     action: 'scrapeSingleListing'
                 });
 
                 if (response) {
-                    scrapedData = response;
-                    displayResults(response);
-                    updateStatus('Single listing scraped', 'success');
+                    if (response.data) {
+                        scrapedData = response.data;
+                        //displayResults(scrapedData);
+                        updateStatus('Single listing scraped', 'success');
+                    }
                 } else {
-                    updateStatus('Not on a listing page', 'error');
+                    updateStatus('Please try again after refreshing the page. ' +
+                        'If the problem persists, please contact us', 'error');
                 }
+            } else if (tab.url.includes("/search")) {
+                updateStatus('Please select the "Scrape Listings" button instead', 'error');
+            } else {
+                updateStatus("Please open a listing's page", 'error');
             }
         } catch (error) {
             console.error('Error scraping single listing:', error);
