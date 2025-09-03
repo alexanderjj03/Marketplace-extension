@@ -1,6 +1,6 @@
 // Configuration
 import {isSuspiciousPrice, analyzeListings, observeListings} from "./src_alex/analyzeListings.js";
-import {analyzeSingleListing} from "./src_alex/analyzeSingleListing.js";
+import {ListingAnalyzer} from "./src_alex/analyzeSingleListing.js";
 
 const config = {
   highlightColors: {
@@ -19,6 +19,7 @@ let listingsData = [];
 let listingResult = '';
 let overlayVisible = true;
 let observerActive = false;
+let listingAnalyzer = new ListingAnalyzer(config);
 
 // Initialize the overlay
 function initOverlay() {
@@ -94,7 +95,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } // NEXT: work on scraping an individual listing page.
 
   if (request.action === 'scrapeSingleListing') {
-    listingResult = analyzeSingleListing(config);
+    listingAnalyzer.analyzeSingleListing();
+    listingResult = listingAnalyzer.getConclusion();
 
     sendResponse({
       success: true,

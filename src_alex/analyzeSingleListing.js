@@ -1,133 +1,168 @@
 // Scrape an individual listing's page
-export function analyzeSingleListing(config) {
-  let conclusion = 'f';
-  let pageConfig = 0;
-  // 0 indicates viewing the listing from the listings page, 1 indicates opening the listing in a new tab
-  // (DOM structure differs :/)
 
-  const root1 = document.querySelector('[aria-label="Marketplace Listing Viewer"]');
-  const root2 = document.querySelector('[aria-label="Collection of Marketplace items"]');
+import {analyzeListings} from "./analyzeListings.js";
 
-  let inline;
-  if (root1) {
-    inline = root1.querySelector('[style="display: inline;"]');
-  } else if (root2) {
-    inline = root2.querySelector('[style="display:inline"]');
-    pageConfig = 1;
-  } else {
-    return "unable to extract data";
+export class ListingAnalyzer {
+
+  constructor(config) {
+    this.config = config;
+    this.observer = null;
+    this.attributes = {};
+    this.conclusion = "";
   }
 
-  const attributeElems = inline.children[1].children[0].children[1].children[0].children[1 - pageConfig].children[0];
-  // No identifiers beyond changing class names to go off of.
-  // This will do for now but we will need a more stable solution.
-
-  let attributes = getAttributes(attributeElems.children); // attributes should be a dictionary.
-  console.log(attributes);
-  conclusion = analyzeAttrs(attributes);
-
-  return conclusion;
-}
-
-function getAttributes(elems) {
-  //let types = ["general", "vehicle", "property rental", "property sale"];
-  let attrs = {};
-
-  if (elems.length === 3) {
-    attrs["type"] = "general";
-    attrs = getGeneral(attrs, elems);
-  } else if (elems.length === 8) {
-    attrs["type"] = "vehicle";
-    attrs = getVehicle(attrs, elems);
-  } else if (elems.length === 15) {
-    attrs = getProperty(attrs, elems);
+  getConclusion() {
+    return this.conclusion;
   }
 
-  return attrs;
-}
+  analyzeSingleListing() {
+    this.attributes = {};
+    this.conclusion = "";
+    let pageConfig = 0;
+    // 0 indicates viewing the listing from the listings page, 1 indicates opening the listing in a new tab
+    // (DOM structure differs :/)
 
-function getGeneral(attrs, elems) {
-  let targetNode = elems[0].children[0].children[2];
-  const postedDate = targetNode.querySelector('[dir="auto"]').children[0];
-  attrs["date"] = postedDate.querySelector('abbr').getAttribute('aria-label');
+    const root1 = document.querySelector('[aria-label="Marketplace Listing Viewer"]');
+    const root2 = document.querySelector('[aria-label="Collection of Marketplace items"]');
 
-  attrs["description"] = extractText(elems[0].children[4].children[0].children[1].children[1]);
-  attrs["condition"] = "N/A";
-
-  let conditionNode = elems[0].children[4].children[0].children[1].children[0];
-  conditionNode.childNodes.forEach((row) => {
-    let labels = row.querySelectorAll('[dir="auto"]');
-    if (labels[0].textContent.toLowerCase() === "condition") {
-      attrs["condition"] = labels[1].textContent.toLowerCase();
+    let inline;
+    if (root1) {
+      inline = root1.querySelector('[style="display: inline;"]');
+    } else if (root2) {
+      inline = root2.querySelector('[style="display:inline"]');
+      pageConfig = 1;
+    } else {
+      return "unable to extract data";
     }
-  });
 
-  let userInfo = extractUserInfo(elems[1]);
-  attrs["user join year"] = userInfo[0];
-  attrs["user rating"] = userInfo[1];
+    const attributeElems = inline.children[1].children[0].children[1].children[0].children[1 - pageConfig].children[0];
+    // No identifiers beyond changing class names to go off of.
+    // This will do for now but we will need a more stable solution.
 
-  return attrs
-}
+    this.getAttributes(attributeElems.children); // attributes should be a dictionary.
+    console.log(this.attributes);
+    this.analyzeAttrs(this.attributes);
+  }
 
-function getVehicle(attrs, elems) {
-  let targetNode = elems[0].children[2];
-  const postedDate = targetNode.querySelector('[dir="auto"]').children[0];
-  attrs["date"] = postedDate.querySelector('abbr').getAttribute('aria-label');
+  // Extracting the relevant attributes of the listing
+  getAttributes(elems) {
+    //let types = ["general", "vehicle", "property rental", "property sale"];
 
-  attrs["description"] = extractText(elems[5].children[1].children[0].children[0]);
-  // Mutation observer needed
+    if (elems.length === 3) {
+      this.attributes["type"] = "general";
+      this.getGeneral(elems);
 
-  let driven = extractText(elems[4].children[1]);
-  attrs["distance driven"] = driven.toLowerCase().split("driven ")[1];
+    } else if (elems.length === 8) {
+      this.attributes["type"] = "vehicle";
+      this.getVehicle(elems);
 
-  let userInfo = extractUserInfo(elems[6]);
-  attrs["user join year"] = userInfo[0];
-  attrs["user rating"] = userInfo[1];
-
-  return attrs
-}
-
-function getProperty(attrs, elems) {
-  let type = extractText(elems[0].children[2]);
-  attrs["type"] = ((type.toLowerCase() === "home sales") ? "property sale" : "property rental");
-  let listedText = extractText(elems[1].children[0].children[1]);
-  attrs["date"] = (listedText.toLowerCase().split(" ago")[0]).split("listed ")[1];
-
-  attrs["description"] = extractText(elems[7].children[1].children[0].children[0]);
-  // Mutation observer needed
-
-  let userInfo = extractUserInfo(elems[13]);
-  attrs["user join year"] = userInfo[0];
-  attrs["user rating"] = userInfo[1];
-
-  return attrs
-}
-
-// starts just above aria-hidden = false
-// PROBLEM: Only the shortened form of the description is extracted (the user has to press the "see more" button).
-// Not too important of an issue for now.
-function extractText(elem) {
-  // Implement a mutation observer for the text content. NOT NEEDED for general listings (only vehicle/property)
-  const target = elem.querySelector('[dir="auto"]');
-  return target.textContent;
-}
-
-function extractUserInfo(elem) {
-  let ret = ["", "no"]
-  let list = elem.querySelector('[role="list"]').childNodes;
-
-  for (let i = 1; i < list.length; i++) {
-    let text = extractText(list[i]).toLowerCase();
-    if (text.includes("highly rated ")) {
-      ret[1] = "yes";
-    } else if (text.includes("joined facebook ")) {
-      ret[0] = parseInt(text.split("in ")[1]);
+    } else if (elems.length === 15) {
+      this.getProperty(elems);
     }
   }
 
-  return ret // user join year, user marketplace rating (yes/no = "highly rated"/not highly rated)
-}
+  getGeneral(elems) {
+    let targetNode = elems[0].children[0].children[2];
+    const postedDate = targetNode.querySelector('[dir="auto"]').children[0];
+    this.attributes["date"] = postedDate.querySelector('abbr').getAttribute('aria-label');
 
-function analyzeAttrs(attributes) {
-  return "";
+    this.attributes["description"] = this.extractText(elems[0].children[4].children[0].children[1].children[1],
+        false);
+    this.attributes["condition"] = "N/A";
+
+    let conditionNode = elems[0].children[4].children[0].children[1].children[0];
+    conditionNode.childNodes.forEach((row) => {
+      let labels = row.querySelectorAll('[dir="auto"]');
+      if (labels[0].textContent.toLowerCase() === "condition") {
+        this.attributes["condition"] = labels[1].textContent.toLowerCase();
+      }
+    });
+
+    let userInfo = this.extractUserInfo(elems[1]);
+    this.attributes["user join year"] = userInfo[0];
+    this.attributes["user rating"] = userInfo[1];
+  }
+
+  getVehicle(elems) {
+    let targetNode = elems[0].children[2];
+    const postedDate = targetNode.querySelector('[dir="auto"]').children[0];
+    this.attributes["date"] = postedDate.querySelector('abbr').getAttribute('aria-label');
+
+    // PROBLEM: Only the shortened form of the description is extracted (the user has to press the "see more" button).
+    // Not too important of an issue for now.
+    this.attributes["description"] = this.extractText(elems[5].children[1].children[0].children[0], true);
+    // Mutation observer needed
+
+    let driven = this.extractText(elems[4].children[1], false);
+    this.attributes["distance driven"] = driven.toLowerCase().split("driven ")[1];
+
+    let userInfo = this.extractUserInfo(elems[6]);
+    this.attributes["user join year"] = userInfo[0];
+    this.attributes["user rating"] = userInfo[1];
+  }
+
+  getProperty(elems) {
+    let type = this.extractText(elems[0].children[2], false);
+    this.attributes["type"] = ((type.toLowerCase() === "home sales") ? "property sale" : "property rental");
+    let listedText = this.extractText(elems[1].children[0].children[1], false);
+    this.attributes["date"] = (listedText.toLowerCase().split(" ago")[0]).split("listed ")[1];
+
+    this.attributes["description"] = this.extractText(elems[7].children[1].children[0].children[0], true);
+    // Mutation observer needed
+
+    let userInfo = this.extractUserInfo(elems[13]);
+    this.attributes["user join year"] = userInfo[0];
+    this.attributes["user rating"] = userInfo[1];
+  }
+
+  // For extracting text from the page. Adds an observer to the text node if specified
+  extractText(elem, addObserver) {
+    // Implement a mutation observer for the text content. NOT NEEDED for general listings (only vehicle/property)
+    const target = elem.querySelector('[dir="auto"]');
+
+    if (addObserver) {
+      if (this.observer) {
+        this.observer.disconnect();
+      }
+
+      this.observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if ((mutation.type === 'characterData') &&
+              (target.textContent.length > this.attributes["description"].length)) {
+            this.attributes["description"] = target.textContent;
+            this.analyzeAttrs(this.attributes);
+          }
+          console.log(this.attributes);
+        });
+      });
+
+      this.observer.observe(target, {
+        characterData: true,
+        subtree: true
+      });
+    }
+
+    return target.textContent;
+  }
+
+  // Extract the user's join year and whether they're highly rated on marketplace or not.
+  extractUserInfo(elem) {
+    let ret = ["", "no"]
+    let list = elem.querySelector('[role="list"]').childNodes;
+
+    for (let i = 1; i < list.length; i++) {
+      let text = this.extractText(list[i], false).toLowerCase();
+      if (text.includes("highly rated ")) {
+        ret[1] = "yes";
+      } else if (text.includes("joined facebook ")) {
+        ret[0] = parseInt(text.split("in ")[1]);
+      }
+    }
+
+    return ret // user join year, user marketplace rating (yes/no = "highly rated"/not highly rated)
+  }
+
+  analyzeAttrs(attributes) {
+    this.conclusion = "f";
+  }
 }
