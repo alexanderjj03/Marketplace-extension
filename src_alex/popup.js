@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
 
                 if (response) {
-                    if (response.data) {
+                    if (response.conclusion) { // Deal with all this crap
                         scrapedData = response.data;
                         //displayResults(scrapedData);
                         updateStatus('Single listing scraped', 'success');

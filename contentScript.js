@@ -16,7 +16,11 @@ const config = {
 // State
 let currentKeyword = '';
 let listingsData = [];
+
+let listingScamScore = 0;
 let listingResult = '';
+let listingRedFlags = [];
+
 let overlayVisible = true;
 let observerActive = false;
 let listingAnalyzer = new ListingAnalyzer(config);
@@ -92,15 +96,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       count: listingsData.length
     });
     return true;
-  } // NEXT: work on scraping an individual listing page.
+  }
 
   if (request.action === 'scrapeSingleListing') {
     listingAnalyzer.analyzeSingleListing();
     listingResult = listingAnalyzer.getConclusion();
+    listingRedFlags = listingAnalyzer.getRedFlags();
+    listingScamScore = listingAnalyzer.getScamScore();
+    console.log(listingResult);
+    console.log(listingRedFlags);
+    console.log(listingScamScore);
 
     sendResponse({
       success: true,
-      data: listingResult,
+      conclusion: listingResult,
+      flags: listingRedFlags,
+      scamScore: listingScamScore
     });
     return true;
   }
