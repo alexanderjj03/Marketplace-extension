@@ -101,7 +101,7 @@ function analyzePrices(listingsData, config) {
 }
 
 // Detect potential scam listings
-function detectPotentialScams(listingsData, config) {
+export function detectPotentialScams(listingsData, config) {
   listingsData.forEach(item => {
     const isPotentialScam = config.scamKeywords.some(keyword =>
         item.title.includes(keyword)

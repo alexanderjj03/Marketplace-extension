@@ -1,5 +1,5 @@
 // Configuration
-import {isSuspiciousPrice, analyzeListings, observeListings} from "./src_alex/analyzeListings.js";
+import {isSuspiciousPrice, analyzeListings, observeListings, detectPotentialScams} from "./src_alex/analyzeListings.js";
 import {ListingAnalyzer} from "./src_alex/analyzeSingleListing.js";
 
 const config = {
@@ -17,6 +17,10 @@ const config = {
 let currentKeyword = '';
 let listingsData = [];
 
+// Persistent list of all detected listings
+let allDetectedListings = [];
+let uniqueListings = new Set(); // Track unique listings to avoid duplicates
+
 let listingScamScore = 0;
 let listingResult = '';
 let listingRedFlags = [];
@@ -24,6 +28,10 @@ let listingRedFlags = [];
 let overlayVisible = true;
 let observerActive = false;
 let listingAnalyzer = new ListingAnalyzer(config);
+
+// Auto-scroll state
+let autoScrollActive = false;
+let autoScrollInterval = null;
 
 // Initialize the overlay
 function initOverlay() {
@@ -55,7 +63,223 @@ function initOverlay() {
     overlay.style.display = overlayVisible ? 'block' : 'none';
   });
 
+  // Add auto-scroll button
+  const autoScrollBtn = document.createElement('button');
+  autoScrollBtn.textContent = 'Auto Scroll';
+  autoScrollBtn.id = 'auto-scroll-btn';
+  autoScrollBtn.style.marginLeft = '10px';
+  overlay.appendChild(autoScrollBtn);
+
+  autoScrollBtn.addEventListener('click', () => {
+    toggleAutoScroll();
+  });
+
+  // Add listings counter
+  const listingsCounter = document.createElement('div');
+  listingsCounter.id = 'listings-counter';
+  listingsCounter.textContent = 'Detected Listings: 0';
+  listingsCounter.style.marginTop = '10px';
+  listingsCounter.style.fontSize = '14px';
+  listingsCounter.style.color = '#333';
+  overlay.appendChild(listingsCounter);
+
+  // Add clear button
+  const clearBtn = document.createElement('button');
+  clearBtn.textContent = 'Clear List';
+  clearBtn.id = 'clear-listings-btn';
+  clearBtn.style.marginTop = '10px';
+  clearBtn.style.backgroundColor = '#ff6b6b';
+  clearBtn.style.color = 'white';
+  clearBtn.style.border = 'none';
+  clearBtn.style.padding = '5px 10px';
+  clearBtn.style.borderRadius = '3px';
+  clearBtn.style.cursor = 'pointer';
+  overlay.appendChild(clearBtn);
+
+  clearBtn.addEventListener('click', () => {
+    clearPersistentListings();
+  });
+
   // Start observing the page
+}
+
+// Function to add new listings to the persistent list
+function addNewListingsToPersistentList(newListings) {
+  newListings.forEach(listing => {
+    // Create a unique identifier for the listing based on title and price
+    const listingId = `${listing.title}_${listing.price}_${listing.other}`;
+
+    if (!uniqueListings.has(listingId)) {
+      uniqueListings.add(listingId);
+      allDetectedListings.push({
+        ...listing,
+        id: listingId,
+        detectedAt: Date.now()
+      });
+    }
+  });
+
+  // Update the counter
+  updateListingsCounter();
+}
+
+// Function to update the listings counter
+function updateListingsCounter() {
+  const counter = document.getElementById('listings-counter');
+  if (counter) {
+    counter.textContent = `Detected Listings: ${allDetectedListings.length}`;
+  }
+}
+
+// Function to clear the persistent list
+function clearPersistentListings() {
+  allDetectedListings = [];
+  uniqueListings.clear();
+  updateListingsCounter();
+}
+
+// Auto-scroll functionality
+function toggleAutoScroll() {
+  const autoScrollBtn = document.getElementById('auto-scroll-btn');
+
+  if (autoScrollActive) {
+    // Stop auto-scroll
+    clearInterval(autoScrollInterval);
+    autoScrollActive = false;
+    autoScrollBtn.textContent = 'Auto Scroll';
+    autoScrollBtn.style.backgroundColor = '';
+  } else {
+    // Start auto-scroll
+    autoScrollActive = true;
+    autoScrollBtn.textContent = 'Stop Scroll';
+    autoScrollBtn.style.backgroundColor = '#ff6b6b';
+
+    autoScrollInterval = setInterval(() => {
+      // Scroll down by a small amount
+      window.scrollBy(0, 200);
+
+      // If we've reached the bottom, scroll back to top
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 100) {
+        window.scrollTo(0, 0);
+      }
+    }, 1000); // Scroll every second
+  }
+}
+
+// Enhanced analyzeListings function that works with persistent list
+function analyzeListingsWithPersistence(currentKeyword, config) {
+  // Get current visible listings
+  const col = document.querySelector('[aria-label="Collection of Marketplace items"]');
+  if (!col) return [];
+
+  const listings = col.querySelectorAll('[data-virtualized="false"]');
+  let currentListings = [];
+
+  // Extract data from each listing
+  listings.forEach((listing) => {
+    const details = listing.querySelectorAll('[dir="auto"]');
+    let contents = [];
+    details.forEach((detail) => contents.push(detail.textContent.toLowerCase()));
+
+    let idx = 0;
+    while ((contents[idx] === "just listed") || ((parseFloat(contents[idx].replace(/[^0-9.]/g, '')) || 0) === 0)) {
+      idx += 1;
+      if (idx >= contents.length) {
+        return;
+      }
+    }
+
+    let price = parseFloat(contents[idx].replace(/[^0-9.]/g, '')) || 0;
+    if (!contents[idx + 1].includes(currentKeyword)) {
+      idx += 1;
+      if (!contents[idx + 1].includes(currentKeyword)) {
+        resetListingStyle(listing);
+        return;
+      }
+    }
+    const title = contents[idx + 1];
+    let other = "";
+    if (idx + 3 < contents.length) {
+      other = contents[idx + 3];
+    }
+
+    currentListings.push({
+      "price": price,
+      "title": title,
+      "other": other,
+      "element": listing
+    });
+  });
+
+  // Add new listings to persistent list
+  addNewListingsToPersistentList(currentListings);
+
+  // Analyze prices using all detected listings
+  if (allDetectedListings.length >= 3) {
+    analyzeAllListingsPrices(allDetectedListings, config);
+  }
+
+  // Check for potential scams
+  detectPotentialScams(currentListings, config);
+
+  return currentListings;
+}
+
+// Analyze prices using all detected listings for better accuracy
+function analyzeAllListingsPrices(allListings, config) {
+  const prices = allListings.map(item => item.price).filter(p => p > config.minPriceForAnalysis);
+  if (prices.length < 3) return;
+
+  const averagePrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+
+  // Apply highlighting to currently visible listings based on all data
+  const col = document.querySelector('[aria-label="Collection of Marketplace items"]');
+  if (!col) return;
+
+  const visibleListings = col.querySelectorAll('[data-virtualized="false"]');
+
+  visibleListings.forEach((listing) => {
+    const details = listing.querySelectorAll('[dir="auto"]');
+    let contents = [];
+    details.forEach((detail) => contents.push(detail.textContent.toLowerCase()));
+
+    let idx = 0;
+    while ((contents[idx] === "just listed") || ((parseFloat(contents[idx].replace(/[^0-9.]/g, '')) || 0) === 0)) {
+      idx += 1;
+      if (idx >= contents.length) {
+        return;
+      }
+    }
+
+    let price = parseFloat(contents[idx].replace(/[^0-9.]/g, '')) || 0;
+    if (price < config.minPriceForAnalysis) return;
+
+    const priceDiff = averagePrice - price;
+    const priceRatio = priceDiff / averagePrice;
+
+    if (priceRatio > config.priceDeviationThreshold) {
+      highlightListing(listing, config.highlightColors.goodDeal,
+          `Good deal! ${Math.round(priceRatio*100)}% below average`);
+    } else if (priceRatio < -config.priceDeviationThreshold) {
+      highlightListing(listing, config.highlightColors.averagePrice,
+          `Potentially overpriced (${Math.round(-priceRatio*100)}% above average)`);
+    } else {
+      resetListingStyle(listing);
+    }
+  });
+}
+
+// Helper functions for highlighting
+function highlightListing(element, color, tooltip) {
+  element.style.backgroundColor = color;
+  element.style.border = '2px solid ' + color.replace('0.2', '0.8');
+  element.title = tooltip;
+}
+
+function resetListingStyle(element) {
+  element.style.backgroundColor = '';
+  element.style.border = '';
+  element.title = '';
 }
 
 // Initialize when page is ready
@@ -77,41 +301,85 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === 'scrapeListings') { // Requires: An item has been searched for
+    console.log('Scrape listings action received');
 
     const side = document.querySelector('[aria-label="Marketplace sidebar"]');
-    const search = side.querySelector('input[aria-label="Search Marketplace"]');
+    console.log('Marketplace sidebar found:', !!side);
 
-    currentKeyword = search.value.toString().trim().toLowerCase(); // should never be null
-
-    listingsData = analyzeListings(currentKeyword, config);
-    if (!observerActive) {
-      observeListings(currentKeyword, config);
-      observerActive = true;
+    if (!side) {
+      sendResponse({
+        success: false,
+        error: 'Marketplace sidebar not found. Make sure you are on a Facebook Marketplace search page.'
+      });
+      return true;
     }
-    // Save scan time
+
+    const search = side.querySelector('input[aria-label="Search Marketplace"]');
+    console.log('Search input found:', !!search);
+
+    if (!search) {
+      sendResponse({
+        success: false,
+        error: 'Search input not found. Please perform a search first.'
+      });
+      return true;
+    }
+
+    currentKeyword = search.value.toString().trim().toLowerCase();
+    console.log('Current keyword:', currentKeyword);
+
+    if (!currentKeyword) {
+      sendResponse({
+        success: false,
+        error: 'No search keyword found. Please search for an item first.'
+      });
+      return true;
+    }
+
+    // Clear previous listings when starting a new search
+    clearPersistentListings();
+
+    listingsData = analyzeListingsWithPersistence(currentKeyword, config);
+    console.log('Listings data:', listingsData);
+    console.log('All detected listings:', allDetectedListings);
+
+    if (!observerActive) {
+      // Create a custom observer that uses the persistent functionality
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.addedNodes.length) {
+            analyzeListingsWithPersistence(currentKeyword, config);
+          }
+        });
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+      observerActive = true;
+      console.log('Mutation observer started');
+    }
 
     sendResponse({
       success: true,
-      data: listingsData,
-      count: listingsData.length
+      data: allDetectedListings, // Return all detected listings
+      count: allDetectedListings.length
     });
     return true;
   }
 
   if (request.action === 'scrapeSingleListing') {
     listingAnalyzer.analyzeSingleListing();
-    listingResult = listingAnalyzer.getConclusion();
-    listingRedFlags = listingAnalyzer.getRedFlags();
-    listingScamScore = listingAnalyzer.getScamScore();
-    console.log(listingResult);
-    console.log(listingRedFlags);
-    console.log(listingScamScore);
+    console.log(listingAnalyzer.getConclusion());
+    console.log(listingAnalyzer.getRedFlags());
+    console.log(listingAnalyzer.getScamScore());
 
     sendResponse({
       success: true,
-      conclusion: listingResult,
-      flags: listingRedFlags,
-      scamScore: listingScamScore
+      conclusion: listingAnalyzer.getConclusion(),
+      flags: listingAnalyzer.getRedFlags(),
+      scamScore: listingAnalyzer.getScamScore()
     });
     return true;
   }

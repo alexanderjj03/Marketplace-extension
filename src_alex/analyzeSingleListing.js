@@ -1,7 +1,5 @@
 // Scrape an individual listing's page
 
-import {analyzeListings} from "./analyzeListings.js";
-
 export class ListingAnalyzer {
 
   constructor(config) {
@@ -188,7 +186,7 @@ export class ListingAnalyzer {
       this.redFlags.push("Brand new account")
     }
 
-    // Scam keywords
+    // Scam keywords (Replace with regex expressions)
     let descriptionLower = this.attributes["description"].toLowerCase();
     const t1Keywords = ["act fast", "act now", "urgent", "limited time offer", "cash app", "cashapp",
       "no viewing", "bitcoin", "ethereum", "crypto", "pay with gift card"];
