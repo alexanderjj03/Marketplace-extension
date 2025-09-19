@@ -32,7 +32,8 @@ export class ListingAnalyzer {
     // (DOM structure differs :/)
 
     const root1 = document.querySelector('[aria-label="Marketplace Listing Viewer"]');
-    const root2 = document.querySelector('[aria-label="Collection of Marketplace items"]');
+    const root2 = document.querySelector('[aria-label="Marketplace sidebar"]')
+        .parentNode.querySelector('[role="main"]');
 
     let inline;
     if (root1) {
