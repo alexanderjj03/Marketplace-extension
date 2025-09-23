@@ -21,13 +21,14 @@
       this.observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
           if (mutation.addedNodes.length) {
+            console.log("e");
             this.scrapeListingsWithPersistence();
           }
         });
       });
       console.log("Observer started");
 
-      this.observer.observe(document.body, {
+      this.observer.observe(document.querySelector('[aria-label="Collection of Marketplace items"]'), {
         childList: true,
         subtree: true,
       });
@@ -38,6 +39,8 @@
     scrapeListingsWithPersistence() {
       // Get current visible listings
       const col = document.querySelector('[aria-label="Collection of Marketplace items"]');
+      // document.querySelector('[aria-label="Marketplace sidebar"]').parentNode.querySelector('[role="main"]');
+
       if (!col) return [];
 
       const listings = col.querySelectorAll('[data-virtualized="false"]');
@@ -187,6 +190,9 @@
 
     // Function to clear the persistent list
     clearPersistentListings() {
+      this.allDetectedListings.forEach(item => {
+        this.resetListingStyle(item.element);
+      });
       this.allDetectedListings = [];
       this.uniqueListings.clear();
       this.updateListingsCounter();
@@ -557,7 +563,7 @@
 
   // Initialize when page is ready
   function checkReadyState() {
-    if (document.readyState === 'complete') {
+    if (document.readyState !== 'loading') {
       initOverlay();
     } else {
       document.addEventListener('DOMContentLoaded', initOverlay);

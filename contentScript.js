@@ -124,7 +124,7 @@ function toggleAutoScroll() {
 
 // Initialize when page is ready
 function checkReadyState() {
-  if (document.readyState === 'complete') {
+  if (document.readyState !== 'loading') {
     initOverlay();
   } else {
     document.addEventListener('DOMContentLoaded', initOverlay);
