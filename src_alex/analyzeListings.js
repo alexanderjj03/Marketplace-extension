@@ -18,7 +18,6 @@ export class ListingListAnalyzer {
     this.observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.addedNodes.length) {
-          console.log("e");
           this.scrapeListingsWithPersistence();
         }
       });

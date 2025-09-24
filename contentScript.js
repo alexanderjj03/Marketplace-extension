@@ -8,7 +8,7 @@ const config = {
     potentialScam: 'rgba(255, 0, 0, 0.2)',
     averagePrice: 'rgba(255, 255, 0, 0.2)'
   },
-  priceDeviationThreshold: 0.3, // 30% below average is good deal
+  priceDeviationThreshold: 0.2, // 20% below average is good deal
   scamKeywords: ['urgent', 'must sell', 'cash only', 'no returns'],
   minPriceForAnalysis: 50 // Don't analyze items below this price
 };
@@ -28,31 +28,6 @@ function initOverlay() {
   const overlay = document.createElement('div');
   overlay.id = 'marketplace-analyzer-overlay';
   document.body.appendChild(overlay);
-
-  // Add search input
-  /*
-  const searchInput = document.createElement('input');
-  searchInput.type = 'text';
-  searchInput.placeholder = 'Filter listings...';
-  searchInput.id = 'analyzer-search';
-  overlay.appendChild(searchInput);
-
-  searchInput.addEventListener('input', (e) => {
-    // currentKeyword = e.target.value.toLowerCase();
-    analyzeListings();
-  });
-  */ // What is this supposed to do?
-
-  // Add toggle button
-  const toggleBtn = document.createElement('button');
-  toggleBtn.textContent = 'Toggle Analyzer';
-  toggleBtn.id = 'analyzer-toggle';
-  overlay.appendChild(toggleBtn);
-
-  toggleBtn.addEventListener('click', () => {
-    overlayVisible = !overlayVisible;
-    overlay.style.display = overlayVisible ? 'block' : 'none';
-  });
 
   // Add auto-scroll button
   const autoScrollBtn = document.createElement('button');
@@ -91,10 +66,22 @@ function initOverlay() {
     listingListAnalyzer.clearPersistentListings();
   });
 
+// Add toggle button
+  const toggleBtn = document.createElement('button');
+  toggleBtn.textContent = 'Toggle Overlay';
+  toggleBtn.style.marginLeft = '10px';
+  toggleBtn.id = 'analyzer-toggle';
+  overlay.appendChild(toggleBtn);
+
+  toggleBtn.addEventListener('click', () => {
+    overlayVisible = !overlayVisible;
+    overlay.style.display = overlayVisible ? 'block' : 'none';
+  });
+
   // Start observing the page
 }
 
-// Auto-scroll functionality
+// Auto-scroll functionality (may cause a user to get facebook banned)
 function toggleAutoScroll() {
   const autoScrollBtn = document.getElementById('auto-scroll-btn');
 
@@ -134,10 +121,13 @@ function checkReadyState() {
 checkReadyState();
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'TOGGLE_EXTENSION') {
-    overlayVisible = request.value;
+  if (request.action === 'toggle_extension') {
+    overlayVisible = !overlayVisible;
     document.getElementById('marketplace-analyzer-overlay').style.display =
         overlayVisible ? 'block' : 'none';
+
+    sendResponse({ success: true, visible: overlayVisible });
+    return true;
   }
 
   if (request.action === 'scrapeListings') { // Requires: An item has been searched for

@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get DOM elements
     const scrapeListingsBtn = document.getElementById('scrapeListingsBtn');
     const scrapeSingleBtn = document.getElementById('scrapeSingleBtn');
-    const highlightPricesBtn = document.getElementById('highlightPricesBtn');
+    const toggleOverlayBtn = document.getElementById('toggleOverlay');
     const exportBtn = document.getElementById('exportBtn');
     const pageTitle = document.getElementById('pageTitle');
     const pageUrl = document.getElementById('pageUrl');
@@ -19,9 +19,9 @@ document.addEventListener('DOMContentLoaded', function() {
     initializePopup();
 
     // Event listeners
+    toggleOverlayBtn.addEventListener('click', toggleOverlay);
     scrapeListingsBtn.addEventListener('click', scrapeListings);
     scrapeSingleBtn.addEventListener('click', scrapeSingleListing);
-    highlightPricesBtn.addEventListener('click', highlightPrices);
     exportBtn.addEventListener('click', exportData);
 
     async function initializePopup() {
@@ -47,6 +47,27 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error initializing popup:', error);
             pageTitle.textContent = 'Error loading page info';
             pageUrl.textContent = 'Check console for details';
+        }
+    }
+
+    async function toggleOverlay() {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab) {
+                const response = await chrome.tabs.sendMessage(tab.id, {
+                    action: 'toggle_extension'
+                });
+
+                if (response && response.success) {
+                    const visibility = response.visible ? 'visible' : 'hidden';
+                    updateStatus(`Overlay is now ${visibility}`, 'success');
+                } else {
+                    updateStatus('Failed to toggle overlay', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Please contact us if this error appears.', error);
+            updateStatus('Please contact us if this error appears.', 'error');
         }
     }
 
@@ -112,25 +133,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error scraping single listing:', error);
             updateStatus('Error scraping listing', 'error');
-        }
-    }
-
-    async function highlightPrices() {
-        try {
-            updateStatus('Highlighting prices...', 'loading');
-            
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            
-            if (tab) {
-                await chrome.tabs.sendMessage(tab.id, {
-                    action: 'highlightPrices'
-                });
-                
-                updateStatus('Prices highlighted', 'success');
-            }
-        } catch (error) {
-            console.error('Error highlighting prices:', error);
-            updateStatus('Error highlighting prices', 'error');
         }
     }
 
