@@ -1,4 +1,4 @@
-// content.js — Facebook Marketplace Analyzer (MV3 content script)
+// content.js — Facebook Marketplace Analyzer
 
 // ===== Config & State =====
 const config = {
