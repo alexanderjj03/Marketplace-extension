@@ -81,7 +81,6 @@ function initOverlay() {
   // Start observing the page
 }
 
-
 // Auto-scroll functionality (may cause a user to get facebook banned)?????
 function toggleAutoScroll() {
   const autoScrollBtn = document.getElementById('auto-scroll-btn');
@@ -109,7 +108,6 @@ function toggleAutoScroll() {
     }, 1000); // Scroll every second
   }
 }
-
 
 // Initialize when page is ready
 function checkReadyState() {
