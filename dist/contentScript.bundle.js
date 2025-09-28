@@ -515,95 +515,66 @@
   let listingAnalyzer = new ListingAnalyzer(config);
   let listingListAnalyzer = new ListingListAnalyzer(config);
 
-  // Auto-scroll state
-  let autoScrollActive = false;
-  let autoScrollInterval = null;
-
   // Initialize the overlay
   function initOverlay() {
-    // Create overlay container
+    if (document.getElementById('marketplace-analyzer-overlay')) return;
+
     const overlay = document.createElement('div');
     overlay.id = 'marketplace-analyzer-overlay';
+    overlay.style.cssText = `
+    position: fixed; top: 12px; right: 12px; z-index: 2147483647;
+    background:#fff; border:1px solid #ddd; border-radius:10px; padding:12px;
+    box-shadow:0 6px 20px rgba(0,0,0,.15); font:13px/1.35 system-ui,sans-serif;
+    min-width: 220px;
+  `;
     document.body.appendChild(overlay);
 
-    // Add auto-scroll button
-    const autoScrollBtn = document.createElement('button');
-    autoScrollBtn.textContent = 'Auto Scroll';
-    autoScrollBtn.id = 'auto-scroll-btn';
-    autoScrollBtn.style.marginLeft = '10px';
-    overlay.appendChild(autoScrollBtn);
-
-    autoScrollBtn.addEventListener('click', () => {
-      toggleAutoScroll();
-    });
-
-    // Add listings counter
     const listingsCounter = document.createElement('div');
     listingsCounter.id = 'listings-counter';
     listingsCounter.textContent = 'Detected Listings: 0';
-    listingsCounter.style.marginTop = '10px';
-    listingsCounter.style.fontSize = '14px';
-    listingsCounter.style.color = '#333';
+    listingsCounter.style.cssText = 'font-size:13px;color:#333;';
     overlay.appendChild(listingsCounter);
 
-    // Add clear button
     const clearBtn = document.createElement('button');
     clearBtn.textContent = 'Clear List';
     clearBtn.id = 'clear-listings-btn';
-    clearBtn.style.marginTop = '10px';
-    clearBtn.style.backgroundColor = '#ff6b6b';
-    clearBtn.style.color = 'white';
-    clearBtn.style.border = 'none';
-    clearBtn.style.padding = '5px 10px';
-    clearBtn.style.borderRadius = '3px';
-    clearBtn.style.cursor = 'pointer';
+    clearBtn.style.cssText = baseBtnCss() + 'background:#ff6b6b;color:#fff;margin-top:10px;';
     overlay.appendChild(clearBtn);
-
     clearBtn.addEventListener('click', () => {
-      listingListAnalyzer.clearPersistentListings();
+      if (listingListAnalyzer) listingListAnalyzer.clearPersistentListings();
     });
 
-  // Add toggle button
     const toggleBtn = document.createElement('button');
     toggleBtn.textContent = 'Toggle Overlay';
-    toggleBtn.style.marginLeft = '10px';
     toggleBtn.id = 'analyzer-toggle';
+    toggleBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-left:10px;margin-top:10px;';
     overlay.appendChild(toggleBtn);
-
     toggleBtn.addEventListener('click', () => {
       overlayVisible = !overlayVisible;
       overlay.style.display = overlayVisible ? 'block' : 'none';
+      const tab = document.getElementById('analyzer-reopen-tab');
+      if (tab) tab.style.display = overlayVisible ? 'none' : 'block';
     });
 
-    // Start observing the page
+    const reopenTab = document.createElement('button');
+    reopenTab.textContent = 'Analyzer';
+    reopenTab.id = 'analyzer-reopen-tab';
+    reopenTab.style.cssText = `
+    position: fixed; top: 12px; right: 12px; z-index: 2147483647;
+    background:#0b5cff;color:#fff;border:none;border-radius:6px;padding:6px 10px;
+    box-shadow:0 4px 12px rgba(0,0,0,.18); font:12px system-ui,sans-serif;
+    display: none;
+  `;
+    document.body.appendChild(reopenTab);
+    reopenTab.addEventListener('click', () => {
+      overlayVisible = true;
+      overlay.style.display = 'block';
+      reopenTab.style.display = 'none';
+    });
   }
 
-  // Auto-scroll functionality (may cause a user to get facebook banned)
-  function toggleAutoScroll() {
-    const autoScrollBtn = document.getElementById('auto-scroll-btn');
-
-    if (autoScrollActive) {
-      // Stop auto-scroll
-      clearInterval(autoScrollInterval);
-      autoScrollActive = false;
-      autoScrollBtn.textContent = 'Auto Scroll';
-      autoScrollBtn.style.backgroundColor = '';
-    } else {
-      // Start auto-scroll
-      autoScrollActive = true;
-      autoScrollBtn.textContent = 'Stop Scroll';
-      autoScrollBtn.style.backgroundColor = '#ff6b6b';
-
-      autoScrollInterval = setInterval(() => {
-        // Scroll down by a small amount
-        window.scrollBy(0, 200);
-
-        // If we've reached the bottom, scroll back to top
-        if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 100) {
-          window.scrollTo(0, 0);
-        }
-      }, 1000); // Scroll every second
-    }
+  function baseBtnCss() {
+    return `background:#f5f5f5;border:1px solid #ccc;border-radius:6px;padding:6px 10px;cursor:pointer;`;
   }
 
   // Initialize when page is ready
@@ -620,9 +591,10 @@
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'toggle_extension') {
       overlayVisible = !overlayVisible;
-      document.getElementById('marketplace-analyzer-overlay').style.display =
-          overlayVisible ? 'block' : 'none';
-
+      const panel = document.getElementById('marketplace-analyzer-overlay');
+      const tab = document.getElementById('analyzer-reopen-tab');
+      if (panel) panel.style.display = overlayVisible ? 'block' : 'none';
+      if (tab) tab.style.display = overlayVisible ? 'none' : 'block';
       sendResponse({ success: true, visible: overlayVisible });
       return true;
     }
