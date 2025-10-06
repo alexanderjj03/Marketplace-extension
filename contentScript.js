@@ -1,16 +1,18 @@
 // Configuration
-import {ListingListAnalyzer} from "./src_alex/analyzeListings.js";
-import {ListingAnalyzer} from "./src_alex/analyzeSingleListing.js";
+import { ListingListAnalyzer } from "./src_alex/analyzeListings.js";
+import { ListingAnalyzer } from "./src_alex/analyzeSingleListing.js";
 
 const config = {
   highlightColors: {
-    goodDeal: 'rgba(0, 255, 0, 0.2)',
-    potentialScam: 'rgba(255, 0, 0, 0.2)',
-    averagePrice: 'rgba(255, 255, 0, 0.2)'
+    goodDeal: 'rgba(0,255,0,0.2)',
+    neutral: 'rgba(255,255,0,0.2)',
+    potentialScam: 'rgba(255,0,0,0.2)',
+    overpriced: 'rgba(255, 179, 0, 0.2)'
   },
-  priceDeviationThreshold: 0.2, // 20% below average is good deal
-  scamKeywords: ['urgent', 'must sell', 'cash only', 'no returns'],
-  minPriceForAnalysis: 50 // Don't analyze items below this price
+  robustZGood: 0.5,
+  robustZBad: 0.5,
+  minPriceForAnalysis: 50,
+  scamKeywords: ['urgent', 'must sell', 'cash only', 'no returns', 'e-transfer', 'wire transfer']
 };
 
 // State
@@ -36,10 +38,43 @@ function initOverlay() {
   `;
   document.body.appendChild(overlay);
 
+  const scrapeListingsBtn = document.createElement('button');
+  scrapeListingsBtn.textContent = 'Scrape Listings';
+  scrapeListingsBtn.id = 'scrape-listings-btn';
+  scrapeListingsBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-bottom:8px;';
+  overlay.appendChild(scrapeListingsBtn);
+  scrapeListingsBtn.addEventListener('click', scrapeListings);
+
+  const scrapeSingleBtn = document.createElement('button');
+  scrapeSingleBtn.textContent = 'Analyze Single Listing';
+  scrapeSingleBtn.id = 'scrape-single-btn';
+  scrapeSingleBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-left:8px;margin-bottom:8px;';
+  overlay.appendChild(scrapeSingleBtn);
+  scrapeSingleBtn.addEventListener('click', scrapeSingleListing);
+
+  const statusContainer = document.createElement('div');
+  statusContainer.id = 'analyzer-status';
+  statusContainer.style.cssText = 'margin-top:4px;magin-bottom:12px;width:260px;display:flex;align-items:top;';
+
+  const statusDot = document.createElement('span');
+  statusDot.id = 'analyzer-status-dot';
+  statusDot.style.cssText = `
+    display:inline-block; width:10px; height:10px; border-radius:50%;
+    background:#28a745; margin-right:6px;margin-top:4px;vertical-align:top;
+  `;
+  statusContainer.appendChild(statusDot);
+
+  const status = document.createElement('span');
+  status.id = 'analyzer-status-text';
+  status.style.cssText = 'width:240px;';
+  status.textContent = 'Marketplace loaded. Select an action listed above.';
+  statusContainer.appendChild(status);
+  overlay.appendChild(statusContainer);
+
   const listingsCounter = document.createElement('div');
   listingsCounter.id = 'listings-counter';
   listingsCounter.textContent = 'Detected Listings: 0';
-  listingsCounter.style.cssText = 'font-size:13px;color:#333;';
+  listingsCounter.style.cssText = 'font-size:13px;color:#333;margin-top:8px;';
   overlay.appendChild(listingsCounter);
 
   const clearBtn = document.createElement('button');
@@ -84,6 +119,21 @@ function baseBtnCss() {
   return `background:#f5f5f5;border:1px solid #ccc;border-radius:6px;padding:6px 10px;cursor:pointer;`;
 }
 
+function updateStatus(message, type) {
+  const status = document.getElementById('analyzer-status');
+  if (status) {
+    status.children[1].textContent = message;
+    const dot = status.children[0];
+    if (type === 'success') {
+      dot.style.background = '#28a745';
+    } else if (type === 'error') {
+      dot.style.background = '#dc3545';
+    } else {
+      dot.style.background = '#ffc107';
+    }
+  }
+}
+
 // Initialize when page is ready
 function checkReadyState() {
   if (document.readyState !== 'loading') {
@@ -95,6 +145,63 @@ function checkReadyState() {
 
 checkReadyState();
 
+function scrapeListings() { // Requires: An item has been searched for
+  let prevKeyword = listingListAnalyzer.currentKeyword;
+  let errorMsg;
+  console.log('Scrape listings action received');
+
+  if (!document.URL.includes("/search")) {
+    errorMsg = 'Not on a Marketplace search page. Please navigate to Facebook Marketplace and perform a search first.';
+    updateStatus(errorMsg, "error");
+    return;
+  }
+
+  const side = document.querySelector('[aria-label="Marketplace sidebar"]');
+  if (!side) {
+    errorMsg = 'Marketplace sidebar not found. Make sure you are on a Facebook Marketplace search page.';
+  }
+
+  const search = side.querySelector('input[aria-label="Search Marketplace"]');
+  if (!search) {
+    errorMsg = 'Search input not found. Please perform a search first.';
+  }
+
+  listingListAnalyzer.currentKeyword = search.value.toString().trim().toLowerCase();
+  if (!listingListAnalyzer.currentKeyword) {
+    errorMsg = 'No search keyword found. Please search for an item first.';
+  }
+
+  if (errorMsg) {
+    updateStatus(errorMsg, "error");
+    return;
+  }
+
+  // Clear previous listings when starting a new search
+  if (prevKeyword !== listingListAnalyzer.currentKeyword) {
+    listingListAnalyzer.clearPersistentListings();
+  }
+
+  listingListAnalyzer.scrapeListingsWithPersistence();
+  listingListAnalyzer.observeListings();
+  updateStatus("Success! Observer is active. Scroll to load more listings.", "success");
+  console.log('All detected listings:', listingListAnalyzer.allDetectedListings);
+}
+
+function scrapeSingleListing() {
+  if (!document.URL.includes("/item/")) {
+    const errorMsg = 'Not on a single listing page. Please navigate to a specific Facebook Marketplace listing.';
+    updateStatus(errorMsg, "error");
+    return;
+  }
+
+  listingAnalyzer.analyzeSingleListing();
+  updateStatus("Single listing analyzed.", "success");
+  console.log(listingAnalyzer.getConclusion());
+  console.log(listingAnalyzer.getRedFlags());
+  console.log(listingAnalyzer.getScamScore());
+}
+
+// Message listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'toggle_extension') {
     overlayVisible = !overlayVisible;
@@ -103,66 +210,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (panel) panel.style.display = overlayVisible ? 'block' : 'none';
     if (tab) tab.style.display = overlayVisible ? 'none' : 'block';
     sendResponse({ success: true, visible: overlayVisible });
-    return true;
-  }
-
-  if (request.action === 'scrapeListings') { // Requires: An item has been searched for
-    let prevKeyword = listingListAnalyzer.currentKeyword;
-    let errorMsg;
-    console.log('Scrape listings action received');
-
-    const side = document.querySelector('[aria-label="Marketplace sidebar"]');
-    if (!side) {
-      errorMsg = 'Marketplace sidebar not found. Make sure you are on a Facebook Marketplace search page.';
-    }
-
-    const search = side.querySelector('input[aria-label="Search Marketplace"]');
-    if (!search) {
-      errorMsg = 'Search input not found. Please perform a search first.';
-    }
-
-    listingListAnalyzer.currentKeyword = search.value.toString().trim().toLowerCase();
-    if (!listingListAnalyzer.currentKeyword) {
-      errorMsg = 'No search keyword found. Please search for an item first.';
-    }
-
-    if ((!side || !search) || !listingListAnalyzer.currentKeyword) {
-      sendResponse({
-        success: false,
-        error: errorMsg
-      });
-      return true;
-    }
-
-    // Clear previous listings when starting a new search
-    if (prevKeyword !== listingListAnalyzer.currentKeyword) {
-      listingListAnalyzer.clearPersistentListings();
-    }
-
-    listingListAnalyzer.scrapeListingsWithPersistence();
-    listingListAnalyzer.observeListings();
-    console.log('All detected listings:', listingListAnalyzer.allDetectedListings);
-
-    sendResponse({
-      success: true,
-      data: listingListAnalyzer.allDetectedListings, // Return all detected listings
-      count: listingListAnalyzer.allDetectedListings.length
-    });
-    return true;
-  }
-
-  if (request.action === 'scrapeSingleListing') {
-    listingAnalyzer.analyzeSingleListing();
-    console.log(listingAnalyzer.getConclusion());
-    console.log(listingAnalyzer.getRedFlags());
-    console.log(listingAnalyzer.getScamScore());
-
-    sendResponse({
-      success: true,
-      conclusion: listingAnalyzer.getConclusion(),
-      flags: listingAnalyzer.getRedFlags(),
-      scamScore: listingAnalyzer.getScamScore()
-    });
     return true;
   }
 });

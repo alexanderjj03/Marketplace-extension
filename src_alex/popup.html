@@ -9,17 +9,14 @@
 <body>
     <div class="container">
         <header>
-            <h1>Marketplace Scraper</h1>
+            <h1>Marketplace Analyzer</h1>
             <p>Facebook Marketplace Data Extractor</p>
         </header>
         
         <main>
             <div class="feature-section">
-                <h2>Scraping Actions</h2>
-                <button id="scrapeListingsBtn" class="btn primary">Scrape Listings</button>
-                <button id="scrapeSingleBtn" class="btn secondary">Scrape Single Item</button>
-                <button id="highlightPricesBtn" class="btn secondary">Highlight Prices</button>
-                <button id="toggleOverlay" class="btn secondary">Toggle Overlay</button>
+                <h2>Actions</h2>
+                <button id="toggleOverlay" class="btn primary">Toggle Overlay</button>
             </div>
             
             <div class="status-section">
@@ -36,14 +33,6 @@
                     <p id="pageTitle">Loading...</p>
                     <p id="pageUrl" class="url-text">Loading...</p>
                 </div>
-            </div>
-
-            <div class="results-section" id="resultsSection" style="display: none;">
-                <h3>Scraped Data</h3>
-                <div id="results" class="results-container">
-                    <p>No data scraped yet</p>
-                </div>
-                <button id="exportBtn" class="btn primary">Export Data</button>
             </div>
         </main>
         

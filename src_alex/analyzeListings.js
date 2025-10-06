@@ -1,20 +1,7 @@
 export class ListingListAnalyzer {
   // Minimal config with sensible defaults
-  constructor(config = {}) {
-    this.config = {
-      highlightColors: {
-        goodDeal: 'rgba(0,255,0,0.2)',
-        potentialScam: 'rgba(255,0,0,0.2)',
-        overpriced: 'rgba(255,255,0,0.2)',
-        ...(config.highlightColors || {})
-      },
-      priceDeviationThreshold: config.priceDeviationThreshold ?? 0.30,
-      robustZGood: config.robustZGood ?? 1.8,
-      robustZBad: config.robustZBad ?? 1.8,
-      minPriceForAnalysis: config.minPriceForAnalysis ?? 50,
-      scamKeywords: config.scamKeywords ?? ['urgent','must sell','cash only','no returns','e-transfer','wire transfer']
-    };
-
+  constructor(config) {
+    this.config = config;
     this.observer = null;
     this.currentKeyword = "";
     this.allDetectedListings = [];
@@ -155,7 +142,11 @@ export class ListingListAnalyzer {
           `Potentially overpriced (robust z ≈ ${round2(z)})`
         );
       } else {
-        this.resetListingStyle(listing.element);
+        this.highlightListing(
+          listing.element,
+          this.config.highlightColors.neutral,
+          `Neutral (robust z ≈ ${round2(z)})`
+        );
       }
     });
   }

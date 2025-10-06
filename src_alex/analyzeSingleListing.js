@@ -111,7 +111,7 @@ export class ListingAnalyzer {
   getProperty(elems) {
     let type = this.extractText(elems[0].children[2], false);
     this.attributes["type"] = ((type.toLowerCase() === "home sales") ? "property sale" : "property rental");
-    let listedText = this.extractText(elems[1].children[0].children[1], false);
+    let listedText = this.extractText(elems[1].children[0].lastChild, false);
     this.attributes["date"] = (listedText.toLowerCase().split(" ago")[0]).split("listed ")[1];
 
     this.attributes["description"] = this.extractText(elems[7].children[1].children[0].children[0], true);

@@ -1,28 +1,17 @@
 // Marketplace Scraper Popup Script
 document.addEventListener('DOMContentLoaded', function() {
     // Get DOM elements
-    const scrapeListingsBtn = document.getElementById('scrapeListingsBtn');
-    const scrapeSingleBtn = document.getElementById('scrapeSingleBtn');
     const toggleOverlayBtn = document.getElementById('toggleOverlay');
-    const exportBtn = document.getElementById('exportBtn');
     const pageTitle = document.getElementById('pageTitle');
     const pageUrl = document.getElementById('pageUrl');
     const statusDot = document.querySelector('.status-dot');
     const statusText = document.querySelector('.status-text');
-    const resultsSection = document.getElementById('resultsSection');
-    const results = document.getElementById('results');
-
-    // Store scraped data
-    let scrapedData = null;
 
     // Initialize popup
     initializePopup();
 
     // Event listeners
     toggleOverlayBtn.addEventListener('click', toggleOverlay);
-    scrapeListingsBtn.addEventListener('click', scrapeListings);
-    scrapeSingleBtn.addEventListener('click', scrapeSingleListing);
-    exportBtn.addEventListener('click', exportData);
 
     async function initializePopup() {
         try {
@@ -68,134 +57,6 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Please contact us if this error appears.', error);
             updateStatus('Please contact us if this error appears.', 'error');
-        }
-    }
-
-    async function scrapeListings() {
-        try {
-            updateStatus('Analyzing listings...', 'loading');
-            
-            // Get current active tab
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            
-            if (tab && tab.url.includes("/search")) {
-                // Send message to content script
-                const response = await chrome.tabs.sendMessage(tab.id, {
-                    action: 'scrapeListings'
-                });
-
-                if (response) {
-                    if (response.data) {
-                        scrapedData = response.data;
-                        //displayResults(scrapedData);
-                        updateStatus(`Scraped ${response.count} listings`, 'success');
-                    }
-                } else {
-                    updateStatus('No listings found', 'error');
-                }
-            } else if (tab.url.includes("/item/")) {
-                updateStatus('Please select the "Scrape Single Item" button instead', 'error');
-            } else {
-                updateStatus('Please search for an item', 'error');
-            }
-        } catch (error) {
-            console.error('Error scraping listings:', error);
-            updateStatus('Error scraping listings', 'error');
-        }
-    }
-
-    async function scrapeSingleListing() { // This is gonna suck
-        try {
-            updateStatus('Analyzing single listing...', 'loading');
-            
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            
-            if (tab && tab.url.includes("/item/")) {
-                const response = await chrome.tabs.sendMessage(tab.id, {
-                    action: 'scrapeSingleListing'
-                });
-
-                if (response) {
-                    if (response.conclusion) { // Deal with all this crap
-                        scrapedData = response.data;
-                        //displayResults(scrapedData);
-                        updateStatus('Single listing scraped', 'success');
-                    }
-                } else {
-                    updateStatus('Please try again after refreshing the page. ' +
-                        'If the problem persists, please contact us', 'error');
-                }
-            } else if (tab.url.includes("/search")) {
-                updateStatus('Please select the "Scrape Listings" button instead', 'error');
-            } else {
-                updateStatus("Please open a listing's page", 'error');
-            }
-        } catch (error) {
-            console.error('Error scraping single listing:', error);
-            updateStatus('Error scraping listing', 'error');
-        }
-    }
-
-    function displayResults(data) {
-        resultsSection.style.display = 'block';
-        
-        if (data.listings) {
-            // Multiple listings
-            const html = `
-                <div class="results-summary">
-                    <p><strong>Scraped ${data.listings.length} listings</strong></p>
-                    <p>URL: ${data.url}</p>
-                    <p>Timestamp: ${new Date(data.timestamp).toLocaleString()}</p>
-                </div>
-                <div class="listings-preview">
-                    ${data.listings.slice(0, 3).map(listing => `
-                        <div class="listing-item">
-                            <strong>${listing.title || 'No title'}</strong><br>
-                            <span class="price">${listing.price || 'No price'}</span><br>
-                            <span class="location">${listing.location || 'No location'}</span>
-                        </div>
-                    `).join('')}
-                    ${data.listings.length > 3 ? `<p>... and ${data.listings.length - 3} more</p>` : ''}
-                </div>
-            `;
-            results.innerHTML = html;
-        } else if (data.title) {
-            // Single listing
-            const html = `
-                <div class="results-summary">
-                    <p><strong>Single Listing Scraped</strong></p>
-                    <p>Title: ${data.title}</p>
-                    <p>Price: ${data.price || 'No price'}</p>
-                    <p>Location: ${data.location || 'No location'}</p>
-                    <p>Seller: ${data.seller || 'No seller info'}</p>
-                    <p>Images: ${data.images ? data.images.length : 0}</p>
-                </div>
-            `;
-            results.innerHTML = html;
-        }
-    }
-
-    function exportData() {
-        if (!scrapedData) {
-            updateStatus('No data to export', 'error');
-            return;
-        }
-
-        try {
-            const dataStr = JSON.stringify(scrapedData, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(dataBlob);
-            
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `marketplace-data-${Date.now()}.json`;
-            link.click();
-            
-            URL.revokeObjectURL(url);
-            updateStatus('Data exported successfully', 'success');
-        } catch (error) {
-            console.error('Error exporting data:', error);
-            updateStatus('Error exporting data', 'error');
         }
     }
 
