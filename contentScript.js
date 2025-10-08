@@ -20,10 +20,6 @@ let overlayVisible = true;
 let listingAnalyzer = new ListingAnalyzer(config);
 let listingListAnalyzer = new ListingListAnalyzer(config);
 
-// Auto-scroll state
-let autoScrollActive = false;
-let autoScrollInterval = null;
-
 // Initialize the overlay
 function initOverlay() {
   if (document.getElementById('marketplace-analyzer-overlay')) return;

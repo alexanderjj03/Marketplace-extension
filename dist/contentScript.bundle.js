@@ -87,6 +87,8 @@
         currentListings.push({ price, title, other, element: listing });
       });
 
+      // Further analysis for certain cases (e.g. cars, computer parts, properties)
+
       this.addNewListingsToPersistentList(currentListings);
 
       if (this.allDetectedListings.length >= 5) {
