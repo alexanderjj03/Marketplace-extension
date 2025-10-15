@@ -492,7 +492,7 @@
 
   // Configuration
 
-  const config = {
+  let config = { // default config
     highlightColors: {
       goodDeal: 'rgba(0,255,0,0.2)',
       neutral: 'rgba(255,255,0,0.2)',
@@ -510,20 +510,30 @@
   let listingAnalyzer = new ListingAnalyzer(config);
   let listingListAnalyzer = new ListingListAnalyzer(config);
 
-  // Initialize the overlay
-  function initOverlay() {
-    if (document.getElementById('marketplace-analyzer-overlay')) return;
+  // Helper
+  function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
 
-    const overlay = document.createElement('div');
-    overlay.id = 'marketplace-analyzer-overlay';
-    overlay.style.cssText = `
-    position: fixed; top: 12px; right: 12px; z-index: 2147483647;
-    background:#fff; border:1px solid #ddd; border-radius:10px; padding:12px;
-    box-shadow:0 6px 20px rgba(0,0,0,.15); font:13px/1.35 system-ui,sans-serif;
-    min-width: 220px;
-  `;
-    document.body.appendChild(overlay);
+  function loadSettings() {
+    chrome.storage.sync.get(['marketplaceColorSettings'], (result) => {
+      if (result.marketplaceColorSettings) {
+        const settings = result.marketplaceColorSettings;
+        config.highlightColors.goodDeal = hexToRgba(settings.goodDealColor, 0.2);
+        config.highlightColors.neutral = hexToRgba(settings.avgDealColor, 0.2);
+        config.highlightColors.overpriced = hexToRgba(settings.overpricedColor, 0.2);
+        config.highlightColors.potentialScam = hexToRgba(settings.scamColor, 0.2);
 
+        listingAnalyzer.config = config; // Update config in analyzers
+        listingListAnalyzer.config = config;
+      }
+    });
+  }
+
+  function addScrapeButtons(overlay) {
     const scrapeListingsBtn = document.createElement('button');
     scrapeListingsBtn.textContent = 'Scrape Listings';
     scrapeListingsBtn.id = 'scrape-listings-btn';
@@ -537,7 +547,9 @@
     scrapeSingleBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-left:8px;margin-bottom:8px;';
     overlay.appendChild(scrapeSingleBtn);
     scrapeSingleBtn.addEventListener('click', scrapeSingleListing);
+  }
 
+  function addStatus(overlay) {
     const statusContainer = document.createElement('div');
     statusContainer.id = 'analyzer-status';
     statusContainer.style.cssText = 'margin-top:4px;magin-bottom:12px;width:260px;display:flex;align-items:top;';
@@ -556,7 +568,9 @@
     status.textContent = 'Marketplace loaded. Select an action listed above.';
     statusContainer.appendChild(status);
     overlay.appendChild(statusContainer);
+  }
 
+  function addQoLFeatures(overlay) {
     const listingsCounter = document.createElement('div');
     listingsCounter.id = 'listings-counter';
     listingsCounter.textContent = 'Detected Listings: 0';
@@ -599,6 +613,27 @@
       overlay.style.display = 'block';
       reopenTab.style.display = 'none';
     });
+  }
+
+  // Initialize the overlay
+  function initOverlay() {
+    loadSettings();
+
+    if (document.getElementById('marketplace-analyzer-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'marketplace-analyzer-overlay';
+    overlay.style.cssText = `
+    position: fixed; top: 12px; right: 12px; z-index: 2147483647;
+    background:#fff; border:1px solid #ddd; border-radius:10px; padding:12px;
+    box-shadow:0 6px 20px rgba(0,0,0,.15); font:13px/1.35 system-ui,sans-serif;
+    min-width: 220px;
+  `;
+    document.body.appendChild(overlay);
+
+    addScrapeButtons(overlay); // Add overlay components
+    addStatus(overlay);
+    addQoLFeatures(overlay);
   }
 
   function baseBtnCss() {

@@ -17,6 +17,8 @@
             <div class="feature-section">
                 <h2>Actions</h2>
                 <button id="toggleOverlay" class="btn primary">Toggle Overlay</button>
+                <button id="userGuide" class="btn secondary">Quick Start Guide</button>
+                <button id="settings" class="btn secondary">Settings</button>
             </div>
             
             <div class="status-section">
@@ -34,10 +36,51 @@
                     <p id="pageUrl" class="url-text">Loading...</p>
                 </div>
             </div>
+
+            <div class="settings-section" id="settingsSection" style="display: none;">
+                <h3>Settings</h3>
+                <details style="margin-top:4px;">
+                    <summary>"Good deal" indicator color</summary>
+                    <p>
+                        <div>
+                            <input type="color" id="goodDealColor" name="Hex code: " value="#00ff00" style="width: 40px; height: 30px; border: none; cursor: pointer;">
+                            <label for="goodDealColor" style="align-items:center;">Click</label>
+                        </div>
+                    </p>
+                </details>
+                <details style="margin-top:4px;">
+                    <summary>"Average deal" indicator color</summary>
+                    <p>
+                        <div>
+                            <input type="color" id="avgDealColor" name="Hex code: " value="#ffff00" style="width: 40px; height: 30px; border: none; cursor: pointer;">
+                            <label for="avgDealColor" style="align-items:center;">Click</label>
+                        </div>
+                    </p>
+                </details>
+                <details style="margin-top:4px;">
+                    <summary>"Overpriced item" indicator color</summary>
+                    <p>
+                        <div>
+                            <input type="color" id="overpricedColor" name="Hex code: " value="#ffb300" style="width: 40px; height: 30px; border: none; cursor: pointer;">
+                            <label for="overpricedColor" style="align-items:center;">Click</label>
+                        </div>
+                    </p>
+                </details>
+                <details style="margin-top:4px;">
+                    <summary>"Potential scam" indicator color</summary>
+                    <p>
+                        <div>
+                            <input type="color" id="scamColor" name="Hex code: " value="#ff0000" style="width: 40px; height: 30px; border: none; cursor: pointer;">
+                            <label for="scamColor" style="align-items:center;">Click</label>
+                        </div>
+                    </p>
+                </details>
+                <button id="saveSettings" class="btn primary" style="margin-top:10px;">Save Settings</button>
+            </div>
         </main>
         
         <footer>
-            <p>&copy; 2024 Marketplace Scraper</p>
+            <p>&copy; 2025 Marketplace Scraper</p>
         </footer>
     </div>
     
