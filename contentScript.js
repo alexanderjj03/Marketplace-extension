@@ -212,10 +212,15 @@ function scrapeListings() { // Requires: An item has been searched for
     listingListAnalyzer.clearPersistentListings();
   }
 
-  listingListAnalyzer.scrapeListingsWithPersistence();
-  listingListAnalyzer.observeListings();
-  updateStatus("Success! Observer is active. Scroll to load more listings.", "success");
-  console.log('All detected listings:', listingListAnalyzer.allDetectedListings);
+  try {
+    listingListAnalyzer.scrapeListingsWithPersistence();
+    listingListAnalyzer.observeListings();
+    updateStatus("Success! Observer is active. Scroll to load more listings.", "success");
+    console.log('All detected listings:', listingListAnalyzer.allDetectedListings);
+  } catch (error) {
+    console.error('Error scraping listings:', error);
+    updateStatus('Please contact us if you see this error message.', 'error');
+  }
 }
 
 function scrapeSingleListing() {
@@ -225,11 +230,16 @@ function scrapeSingleListing() {
     return;
   }
 
-  listingAnalyzer.analyzeSingleListing();
-  updateStatus("Single listing analyzed.", "success");
-  console.log(listingAnalyzer.getConclusion());
-  console.log(listingAnalyzer.getRedFlags());
-  console.log(listingAnalyzer.getScamScore());
+  try {
+    listingAnalyzer.analyzeSingleListing();
+    updateStatus("Single listing analyzed.", "success");
+    console.log(listingAnalyzer.getConclusion());
+    console.log(listingAnalyzer.getRedFlags());
+    console.log(listingAnalyzer.getScamScore());
+  } catch (error) {
+    console.error('Error analyzing single listing:', error);
+    updateStatus('Please contact us if you see this error message.', 'error');
+  }
 }
 
 // Message listener
