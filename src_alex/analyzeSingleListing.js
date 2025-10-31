@@ -6,6 +6,7 @@ export class ListingAnalyzer {
     this.config = config;
     this.observer = null;
     this.attributes = {};
+    this.concerningKeywords = [];
     this.redFlags = [];
     this.scamScore = 0;
     this.conclusion = "";
@@ -58,16 +59,14 @@ export class ListingAnalyzer {
   getAttributes(elems) {
     //let types = ["general", "vehicle", "property rental", "property sale"];
 
-    if (elems.length === 3) {
-      this.attributes["type"] = "general";
-      this.getGeneral(elems);
-
-    } else if (elems.length === 8) {
+    if (elems.length >= 15) {
+      this.getProperty(elems);
+    } else if (elems.length >= 8) {
       this.attributes["type"] = "vehicle";
       this.getVehicle(elems);
-
-    } else if (elems.length === 15) {
-      this.getProperty(elems);
+    } else if (elems.length >= 3) {
+      this.attributes["type"] = "general";
+      this.getGeneral(elems);
     }
   }
 
@@ -132,11 +131,17 @@ export class ListingAnalyzer {
         this.observer.disconnect();
       }
 
+      const button = target.querySelector('[role="button"]');
+      if (button && button.textContent === 'See more') {
+        button.style.cssText = 'background:#ffdddd;';
+      }
+
       this.observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
           if ((mutation.type === 'characterData') &&
               (target.textContent.length > this.attributes["description"].length)) {
             this.attributes["description"] = target.textContent;
+            button.style.cssText = '';
             this.analyzeAttrs();
           }
           console.log(this.attributes);
@@ -172,11 +177,12 @@ export class ListingAnalyzer {
   analyzeAttrs() {
     const currentYear = new Date().getFullYear();
     this.scamScore = 0; // Needs to be placed here in case the description's text is updated
+    this.concerningKeywords = [];
     this.redFlags = [];
     this.conclusion = "";
 
     if (!this.attributes["user rating"]) {
-      this.scamScore += 0.2;
+      this.scamScore += 0.15;
       this.redFlags.push("Non-reputable seller")
     }
 
@@ -196,13 +202,18 @@ export class ListingAnalyzer {
 
     t1Keywords.forEach((t1) => {
       if (descriptionLower.includes(t1)) {
-        this.scamScore += 0.05;
+        this.scamScore += 0.10;
+        this.concerningKeywords.push(t1);
       }
     });
 
     t2Keywords.forEach((t2) => {
       if (descriptionLower.includes(t2)) {
-        this.scamScore += 0.025;
+        this.scamScore += 0.05;
+        this.concerningKeywords.push(t2);
+        if (t2 === "or best offer" || t2 === "obo") {
+          this.redFlags.push("You will likely be pressured to pay more than listed price.");
+        }
       }
     });
 
@@ -229,11 +240,31 @@ export class ListingAnalyzer {
     }
 
     if (this.scamScore <= 0.2) {
-      this.conclusion = "Most likely safe";
+      this.conclusion = "Most likely safe.";
     } else if (this.scamScore <= 0.4) {
       this.conclusion = "Scam possible, proceed with caution.";
     } else {
       this.conclusion = "Scam likely. Use extreme caution or find a different listing.";
     }
+
+    this.displayResults();
+  }
+
+  displayResults() {
+    const resultsDiv = document.getElementById('analysis-results-container');
+    if (!resultsDiv) {
+      console.error("Results container not found");
+      return;
+    }
+    resultsDiv.textContent = ""; // Clear previous results
+
+    resultsDiv.innerHTML = `
+      <p><strong>Disclaimer:</strong> This does not take price analysis results into consideration. 
+      If the price is flagged as too good to be true, it may be a scam.</p>
+      <p><strong>Scam Score:</strong> ${(this.scamScore * 100).toFixed(2)}%</p>
+      <p><strong>Conclusion:</strong> ${this.conclusion}</p>
+      <p><strong>Red Flags:</strong> ${this.redFlags.length > 0 ? this.redFlags.join("; ") : "None"}</p>
+      <p><strong>Concerning Keywords:</strong> ${this.concerningKeywords.length > 0 ? this.concerningKeywords.join(", ") : "None"}</p>
+    `;
   }
 }

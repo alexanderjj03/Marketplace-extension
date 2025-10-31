@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('avgDealColor').value = settings.avgDealColor || '#ffff00';
                 document.getElementById('overpricedColor').value = settings.overpricedColor || '#ffb300';
                 document.getElementById('scamColor').value = settings.scamColor || '#ff0000';
+                document.getElementById('minPriceInput').value = settings.minPriceForAnalysis || 50;
             }
 
         } catch (error) {
@@ -91,18 +92,21 @@ document.addEventListener('DOMContentLoaded', function() {
         settingsSection.style.display = settingsSection.style.display === 'none' ? 'block' : 'none';
     }
 
+    // Add setting for minimum price threshold
     async function saveSettings() {
         try {
             const goodDealColor = document.getElementById('goodDealColor');
             const avgDealColor = document.getElementById('avgDealColor');
             const overpricedColor = document.getElementById('overpricedColor');
             const scamColor = document.getElementById('scamColor');
+            const minPrice = document.getElementById('minPriceInput');
 
             const settings = {
                 goodDealColor: goodDealColor.value,
                 avgDealColor: avgDealColor.value,
                 overpricedColor: overpricedColor.value,
-                scamColor: scamColor.value
+                scamColor: scamColor.value,
+                minPriceForAnalysis: parseFloat(minPrice.value) || 0
             };
 
             await chrome.storage.sync.set({ marketplaceColorSettings: settings });

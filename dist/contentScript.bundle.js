@@ -43,6 +43,7 @@
 
     // Scrape visible listings, persist/dedupe, then analyze prices and scams
     scrapeListingsWithPersistence() {
+      const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, ' ').trim();
       const col = document.querySelector('[aria-label="Collection of Marketplace items"]');
       if (!col) return;
 
@@ -50,6 +51,11 @@
       const currentListings = [];
 
       listings.forEach((listing) => {
+        const hrefElem = listing.querySelector('a[href]');
+        const href = hrefElem ? hrefElem.getAttribute('href') : null;
+        const id = `${norm(href.split('/')[3])}`;
+        if (!href || !href.includes('marketplace/item/')) return;
+
         const details = listing.querySelectorAll('[dir="auto"]');
         if (!details || !details.length) return;
 
@@ -69,22 +75,35 @@
         const price = parseFloat(contents[idx].replace(/[^0-9.]/g, '')) || 0;
 
         const titleCandidate = contents[idx + 1] ?? "";
-        let title = titleCandidate;
+        const altCandidate = contents[idx + 2] ?? "";
+        let title = ".";
 
-        if (this.currentKeyword && !titleCandidate.includes(this.currentKeyword)) {
-          const alt = contents[idx + 2] ?? "";
-          if (alt.includes(this.currentKeyword)) {
-            idx += 1;
-            title = alt;
-          } else {
-            this.resetListingStyle(listing);
-            return;
+        const currentKeywordList = this.currentKeyword.split(' ');
+
+        for (const kw of currentKeywordList) { // Extracting title based on search keywords
+          if (titleCandidate.includes(kw)) {
+            title = titleCandidate;
+            break;
           }
         }
 
-        const other = (idx + 3 < contents.length) ? (contents[idx + 3] ?? "") : "";
+        if (title === ".") {
+          for (const kw of currentKeywordList) {
+            if (altCandidate.includes(kw)) {
+              title = altCandidate;
+              idx += 1;
+              break;
+            }
+          }
+        }
 
-        currentListings.push({ price, title, other, element: listing });
+        if (title === ".") {
+          this.resetListingStyle(listing);
+          return;
+        }
+
+        const other = (idx + 3 < contents.length) ? (contents[idx + 3] ?? "") : ""; // Additional info (e.g. number of km on a car)
+        currentListings.push({ price, title, id, other, element: listing });
       });
 
       // Further analysis for certain cases (e.g. cars, computer parts, properties)
@@ -100,15 +119,11 @@
 
     // Dedupe & persist newly seen listings
     addNewListingsToPersistentList(newListings) {
-      const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, ' ').trim();
-
       newListings.forEach((listing) => {
-        const listingId = `${norm(listing.title)}|${listing.price}|${norm(listing.other)}`;
-        if (!this.uniqueListings.has(listingId)) {
-          this.uniqueListings.add(listingId);
+        if (!this.uniqueListings.has(listing.id)) {
+          this.uniqueListings.add(listing.id);
           this.allDetectedListings.push({
             ...listing,
-            id: listingId,
             detectedAt: Date.now()
           });
         }
@@ -118,7 +133,7 @@
       this.updateListingsCounter();
     }
 
-    // Price analysis using robust statistics (median + MAD) to highlight deals/overpriced items
+    // Enhanced price analysis with category-specific formulas (made up formulas for now lol!!) for better deal detection
     analyzeAllListingsPrices(curListings) {
       const prices = this.allDetectedListings
         .map(i => i.price)
@@ -126,37 +141,440 @@
 
       if (prices.length < 5) return;
 
+      // Basic statistical analysis for general pricing context
       const med = median(prices);
-      const mad = median(prices.map(p => Math.abs(p - med))) || 1;
+      const mad = median(prices.map(p => Math.abs(p - med))) || 1; 
+
+      // Detect category (based off of currentKeyword)
+      const category = this.detectListingCategory(this.currentKeyword);
+
+      let priceNormalizedListings = [];
+      if (category === 'car') {
+        priceNormalizedListings = this.preprocessCarListings();
+        console.log("Normalized: ", priceNormalizedListings);
+      } // Preprocess car listings
 
       curListings.forEach((listing) => {
         if (listing.price < this.config.minPriceForAnalysis) return;
-
-        const z = (listing.price - med) / (1.4826 * mad);
-
-        if (z <= -this.config.robustZGood) {
-          this.highlightListing(
-            listing.element,
-            this.config.highlightColors.goodDeal,
-            `Good deal (robust z ≈ ${round2(z)})`
-          );
-        } else if (z >= this.config.robustZBad) {
-          this.highlightListing(
-            listing.element,
-            this.config.highlightColors.overpriced,
-            `Potentially overpriced (robust z ≈ ${round2(z)})`
-          );
-        } else {
-          this.highlightListing(
-            listing.element,
-            this.config.highlightColors.neutral,
-            `Neutral (robust z ≈ ${round2(z)})`
-          );
-        }
+        
+        // Get category-specific analysis results
+        const analysisResult = this.analyzeCategorySpecificPrice(listing, category, med, mad, priceNormalizedListings);
+        
+        // Apply appropriate highlighting based on analysis
+        this.applyAnalysisHighlighting(listing, analysisResult);
       });
     }
 
-    // Heuristic scam detection (keywords + “too-good-to-be-true” relative floor)
+    // this one i added category detection based on listing titles and keywords:)
+    detectListingCategory(title) {
+      const titleLower = String(title || "").toLowerCase();
+      
+      // Car-related keywords (comprehensive list)
+      const carKeywords = [
+        'car', 'vehicle', 'auto', 'truck', 'suv', 'sedan', 'coupe', 'hatchback',
+        'bmw', 'mercedes', 'audi', 'toyota', 'honda', 'ford', 'chevrolet', 'nissan',
+        'miles', 'mileage', 'year', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024',
+        '2005', '2006', '2007', '2008', '2009', '2010', '2011', '2012', '2013', '2014', 'automatic', 
+        'manual', 'transmission', 'engine', 'v6', 'v8', 'hybrid', 'electric'
+      ];
+      
+      // Electronics keywords (phones, computers, gaming, etc.)
+      const electronicsKeywords = [
+        'iphone', 'samsung', 'galaxy', 'pixel', 'oneplus', 'xiaomi', 'huawei',
+        'macbook', 'laptop', 'computer', 'pc', 'desktop', 'imac', 'mac pro',
+        'ipad', 'tablet', 'surface', 'kindle', 'fire tablet',
+        'playstation', 'ps4', 'ps5', 'xbox', 'nintendo', 'switch', 'steam deck',
+        'gpu', 'graphics card', 'rtx', 'gtx', 'amd', 'nvidia', 'intel',
+        'monitor', 'display', 'tv', 'smart tv', 'oled', 'led', '4k', '8k',
+        'headphones', 'airpods', 'speaker', 'bluetooth', 'wireless'
+      ];
+      
+      // Property/real estate keywords
+      const propertyKeywords = [
+        'apartment', 'house', 'condo', 'condominium', 'townhouse', 'studio',
+        'bedroom', 'bathroom', 'sqft', 'square feet', 'rent', 'lease',
+        'furnished', 'unfurnished', 'utilities', 'parking', 'garage',
+        'downtown', 'suburb', 'neighborhood', 'district', 'area'
+      ];
+
+      // Count keyword matches for each category inded this is the logic 
+      const carScore = carKeywords.filter(kw => titleLower.includes(kw)).length;
+      const electronicsScore = electronicsKeywords.filter(kw => titleLower.includes(kw)).length;
+      const propertyScore = propertyKeywords.filter(kw => titleLower.includes(kw)).length;
+
+      // Return category with highest score, or 'general' if no clear winner
+      let scores = [carScore, electronicsScore, propertyScore].sort((a, b) => b - a);
+      if (scores[0] === scores[1]) {
+        return 'general';
+      } else {
+        if (carScore === scores[0]) return 'car';
+        if (electronicsScore === scores[0]) return 'electronics';
+        if (propertyScore === scores[0]) return 'property';
+      }
+      
+      return 'general';
+    }
+
+    // Category-specific price analysis with some formulas
+    analyzeCategorySpecificPrice(listing, category, medianPrice, mad, priceNormalizedListings) {
+      const price = listing.price;
+      const title = String(listing.title || "").toLowerCase();
+      
+      switch (category) {
+        case 'car':
+          return this.analyzeCarPrice(listing.id, priceNormalizedListings);
+        case 'electronics':
+          return this.analyzeElectronicsPrice(price, title, medianPrice);
+        case 'property':
+          return this.analyzePropertyPrice(price, title, medianPrice);
+        default:
+          return this.analyzeGeneralPrice(price, medianPrice, mad);
+      }
+    }
+
+    // Further preprocessing for car listings if needed (price adjustment based on year/mileage)
+    preprocessCarListings() {  
+      let processedListings = [];
+      for (const listing of this.allDetectedListings) {
+        let listingCopy = {...listing};
+
+        const title = listing.title;
+        const price = listing.price;
+        const odometer = listing.other;
+
+        let mileageInKms = 0;
+        if (odometer && odometer.includes('km')) {
+          let value = odometer.split(' km')[0];
+          if (value.includes('k')) {
+            value = value.replace('k', '');
+            mileageInKms = parseFloat(value) * 1000;
+          } else {
+            mileageInKms = parseFloat(value);
+          }
+        } else if (odometer && odometer.contains('mi')) {
+          let value = odometer.split(' mi')[0];
+          if (value.includes('k')) {
+            value = value.replace('k', '');
+            mileageInKms = parseFloat(value) * 1609.34;
+          } else {
+            mileageInKms = parseFloat(value) * 1.60934;
+          }
+        }
+
+        const yearMatch = title.match(/\b(19|20)\d{2}\b/);
+        const year = yearMatch ? parseInt(yearMatch[0]) : null;
+
+        let multiplier = ((mileageInKms > 0 ? Math.pow(2, mileageInKms/130000) : 1.5) * (year ? (1 + Math.min((new Date().getFullYear() - year) * 0.08, 0.4)) : 1.5));
+
+        // Modify the price in place based on year and mileage for normalization
+        let adjustedPrice = price * Math.min(multiplier, 30);
+
+        listingCopy.price = adjustedPrice;
+        processedListings.push(listingCopy);
+      }
+      return processedListings;
+    }
+
+    // Car price analysis considering year, mileage and market factors 
+    // FYI: AnalysisText does not show anywhere on the screen
+    // This needs to be redone...
+    analyzeCarPrice(listingId, priceNormalizedListings) {
+      // Input validation for errors
+      const listing = priceNormalizedListings.find(l => l.id === listingId);
+      const prices = priceNormalizedListings
+        .map(i => i.price)
+        .filter(p => p > this.config.minPriceForAnalysis);
+      const medianPrice = median(prices);
+
+      if (!listing || !medianPrice || medianPrice <= 0) {
+        return {
+          score: 0,
+          text: `Car Analysis: Invalid price data`,
+          category: 'car',
+          savingsPercent: 0
+        };
+      }
+      
+      let dealScore = 0;
+      let analysisText = `Car Analysis: $${listing.price.toLocaleString()}`;
+
+      let savingsPercent = this.calculateSavingsPercent(listing.price, medianPrice);
+      dealScore += savingsPercent * 0.75; // Moderate weight
+      analysisText += ` | ${Math.round(savingsPercent)}% vs median price`;
+      
+      return {
+        score: dealScore,
+        text: analysisText,
+        category: 'car',
+        savingsPercent: savingsPercent
+      };
+    }
+
+    // below is the electronic part i adeed (similar logic )
+    // Electronicsprice analysis considering age, condition, and market value
+    analyzeElectronicsPrice(price, title, medianPrice) {
+      // Input validation for  errors
+      if (!price || price <= 0 || !medianPrice || medianPrice <= 0) {
+        return {
+          score: 0,
+          text: `Electronics Analysis: Invalid price data`,
+          category: 'electronics',
+          savingsPercent: 0
+        };
+      }
+      
+      let dealScore = 0;
+      let analysisText = `Electronics Analysis: $${price.toLocaleString()}`;
+      
+      // Phone-specific analysis
+      if (title.includes('iphone') || title.includes('samsung') || title.includes('galaxy')) {
+        const phoneModels = {
+          'iphone 15': 800, 'iphone 14': 600, 'iphone 13': 400, 'iphone 12': 300, 'iphone 11': 200,
+          's23': 600, 's24': 800, 'galaxy s23': 600, 'galaxy s24': 800, 'galaxy s22': 400
+        };
+        
+        for (const [model, expectedPrice] of Object.entries(phoneModels)) {
+          if (title.includes(model)) {
+            const savings = ((expectedPrice - price) / expectedPrice) * 100;
+            if (savings > 30) {
+              dealScore += 30;
+              analysisText += ` | Excellent phone deal (${Math.round(savings)}% off retail)`;
+            } else if (savings > 15) {
+              dealScore += 15;
+              analysisText += ` | Good phone deal (${Math.round(savings)}% off retail)`;
+            } else if (savings < -20) {
+              dealScore -= 20;
+              analysisText += ` | Overpriced phone (${Math.round(Math.abs(savings))}% above retail)`;
+            }
+            break;
+          }
+        }
+      }
+      
+      // Gaming console analysis
+      if (title.includes('playstation') || title.includes('ps5') || title.includes('ps4') || title.includes('xbox')) {
+        const consolePrices = {
+          'ps5': 500, 'playstation 5': 500, 'xbox series x': 500, 'xbox series s': 300,
+          'ps4': 200, 'playstation 4': 200, 'xbox one': 150
+        };
+        
+        for (const [console, expectedPrice] of Object.entries(consolePrices)) {
+          if (title.includes(console)) {
+            const savings = ((expectedPrice - price) / expectedPrice) * 100;
+            if (savings > 25) {
+              dealScore += 25;
+              analysisText += ` | Great console deal (${Math.round(savings)}% off retail)`;
+            } else if (savings < -15) {
+              dealScore -= 15;
+              analysisText += ` | Console overpriced (${Math.round(Math.abs(savings))}% above retail)`;
+            }
+            break;
+          }
+        }
+      }
+      
+      // Laptop/computer analysis
+      if (title.includes('laptop') || title.includes('macbook') || title.includes('computer')) {
+        // MacBook specific analysis
+        if (title.includes('macbook')) {
+          const macbookPrices = {
+            'macbook air m1': 800, 'macbook air m2': 1000, 'macbook pro m1': 1200, 'macbook pro m2': 1500
+          };
+          
+          for (const [model, expectedPrice] of Object.entries(macbookPrices)) {
+            if (title.includes(model)) {
+              const savings = ((expectedPrice - price) / expectedPrice) * 100;
+              if (savings > 20) {
+                dealScore += 25;
+                analysisText += ` | Excellent MacBook deal (${Math.round(savings)}% off retail)`;
+              } else if (savings < -10) {
+                dealScore -= 15;
+                analysisText += ` | MacBook overpriced (${Math.round(Math.abs(savings))}% above retail)`;
+              }
+              break;
+            }
+          }
+        } else {
+          // General laptop analysis
+          if (price < medianPrice * 0.6) {
+            dealScore += 20;
+            analysisText += ` | Great laptop deal`;
+          } else if (price > medianPrice * 1.3) {
+            dealScore -= 15;
+            analysisText += ` | Laptop overpriced`;
+          }
+        }
+      }
+      
+      // Condition-based adjustments this one took me a while bro
+      if (title.includes('new') || title.includes('sealed')) {
+        dealScore += 10;
+        analysisText += ` | New condition bonus`;
+      } else if (title.includes('broken') || title.includes('damaged') || title.includes('cracked')) {
+        dealScore -= 30;
+        analysisText += ` | Damaged condition - negotiate lower`;
+      } else if (title.includes('refurbished') || title.includes('reconditioned')) {
+        if (price < medianPrice * 0.7) {
+          dealScore += 10;
+          analysisText += ` | Good refurbished deal`;
+        }
+      }
+      
+      return {
+        score: dealScore,
+        text: analysisText,
+        category: 'electronics',
+        savingsPercent: this.calculateSavingsPercent(price, medianPrice)
+      };
+    }
+
+    // these are for property stuff 
+    // Property price analysis using location and property type factors
+    analyzePropertyPrice(price, title, medianPrice) {
+      // Input validation to prevent errors
+      if (!price || price <= 0 || !medianPrice || medianPrice <= 0) {
+        return {
+          score: 0,
+          text: `Property Analysis: Invalid price data`,
+          category: 'property',
+          savingsPercent: 0
+        };
+      }
+      
+      let dealScore = 0;
+      let analysisText = `Property Analysis: $${price.toLocaleString()}`;
+
+      let savingsPercent = this.calculateSavingsPercent(price, medianPrice);
+      dealScore += savingsPercent * 0.7; // Moderate weight
+      analysisText += ` | ${Math.round(savingsPercent)}% vs median price`;
+      
+      // Location-based adjustments (simplified)
+      
+      const premiumLocations = ['downtown', 'city center', 'waterfront', 'beach'];
+      const hasPremiumLocation = premiumLocations.some(loc => title.includes(loc));
+      if (hasPremiumLocation) {
+        // Premium locations justify higher prices
+        dealScore += 10;
+        analysisText += ` | Premium location deal`;
+      }
+      
+      // Furnishing analysis
+      if (title.includes('furnished')) {
+        // Furnished properties cost more but add value
+        dealScore += 5;
+        analysisText += ` | Furnished`;
+      } else if (title.includes('unfurnished')) {
+        // Unfurnished should be cheaper
+        dealScore -= 5;
+        analysisText += ` | Unfurnished`;
+      }
+      
+      return {
+        score: dealScore,
+        text: analysisText,
+        category: 'property',
+        savingsPercent: this.calculateSavingsPercent(price, medianPrice)
+      };
+    }
+
+    // General price analysis for non-categorized items
+    analyzeGeneralPrice(price, medianPrice, mad) {
+      // Input validation to prevent errors
+      if (!price || price <= 0 || !medianPrice || medianPrice <= 0 || !mad || mad <= 0) {
+        return {
+          score: 0,
+          text: `General Analysis: Invalid price data`,
+          category: 'general',
+          savingsPercent: 0
+        };
+      }
+      
+      const z = (price - medianPrice) / (1.4826 * mad);
+      const savingsPercent = this.calculateSavingsPercent(price, medianPrice);
+      
+      let dealScore = 0;
+      let analysisText = `General Analysis: $${price.toLocaleString()}`;
+      
+      if (z <= -this.config.robustZGood) {
+        dealScore += 20;
+        analysisText += ` | Good deal (${Math.round(savingsPercent)}% below median)`;
+      } else if (z >= this.config.robustZBad) {
+        dealScore -= 20;
+        analysisText += ` | Overpriced (${Math.round(Math.abs(savingsPercent))}% above median)`;
+      } else {
+        analysisText += ` | Fair price (${Math.round(savingsPercent)}% vs median)`;
+      }
+      
+      return {
+        score: dealScore,
+        text: analysisText,
+        category: 'general',
+        savingsPercent: savingsPercent
+      };
+    }
+
+    // Calculating  percentage savings compared to median price considering the error handlings
+    calculateSavingsPercent(price, medianPrice) {
+      // Handle edge cases to prevent division by zero or invalid calculations
+      if (!medianPrice || medianPrice <= 0) return 0;
+      if (!price || price < 0) return 0;
+      
+      const savings = ((medianPrice - price) / medianPrice) * 100;
+      
+      // Cap extreme values to prevent display issues
+      return Math.max(-999, Math.min(999, savings));
+    }
+
+    // Apply highlighting based on analysis results
+    applyAnalysisHighlighting(listing, analysisResult) {
+      const { score, text, category, savingsPercent } = analysisResult;
+
+      let savingsThreshold = 66;
+
+      switch (category) {
+        case "car":
+          savingsThreshold = 50;
+          break;
+        case "electronics":
+          savingsThreshold = 55;
+          break;
+        case "property":
+          savingsThreshold = 50;
+          break;
+        default:
+          savingsThreshold = 66;
+      }
+      
+      // Determine highlighting color and message based on score
+      let color, message;
+      
+      if (savingsPercent >= savingsThreshold) {
+        color = this.config.highlightColors.potentialScam;
+        message = `🚨 Too good to be true (probable scam/inaccurate listed price): ${text}`;
+      } else if (score >= 25) {
+        color = this.config.highlightColors.goodDeal;
+        message = `🔥 EXCELLENT DEAL: ${text}`;
+      } else if (score >= 10) {
+        color = this.config.highlightColors.goodDeal;
+        message = `✅ Good Deal: ${text}`;
+      } else if (score >= 0) {
+        color = this.config.highlightColors.neutral;
+        message = `👍 Fair Deal: ${text}`;
+      } else if (score <= -20) {
+        color = this.config.highlightColors.overpriced;
+        message = `⚠️ Overpriced: ${text}`;
+      } else if (score <= -10) {
+        color = this.config.highlightColors.overpriced;
+        message = `💰 High Price: ${text}`;
+      } else {
+        color = this.config.highlightColors.neutral;
+        message = `📊 ${text}`;
+      }
+      
+      this.highlightListing(listing.element, color, message);
+    }
+
+    //  scam detection (keywords + “too-good-to-be-true” relative floor)
     detectPotentialScams() {
       const baselinePrices = this.allDetectedListings
         .map(i => i.price)
@@ -218,6 +636,12 @@
 
     // Clear data and remove any residual highlights
     clearPersistentListings() {
+      if (this.observer) {
+        this.observer.disconnect();
+        this.observer = null;
+        console.log("Observer disconnected");
+      }
+
       this.allDetectedListings.forEach(item => this.resetListingStyle(item.element));
       this.allDetectedListings = [];
       this.uniqueListings.clear();
@@ -239,10 +663,6 @@
     return n % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
   }
 
-  function round2(x) {
-    return Math.round(x * 100) / 100;
-  }
-
   function safeOpaque(rgba) {
     const m = typeof rgba === 'string' ? rgba.match(/^rgba\(\s*([0-9.\s]+),\s*([0-9.\s]+),\s*([0-9.\s]+),\s*([0-9.\s]+)\s*\)$/i) : null;
     if (!m) return rgba;
@@ -258,6 +678,7 @@
       this.config = config;
       this.observer = null;
       this.attributes = {};
+      this.concerningKeywords = [];
       this.redFlags = [];
       this.scamScore = 0;
       this.conclusion = "";
@@ -310,16 +731,14 @@
     getAttributes(elems) {
       //let types = ["general", "vehicle", "property rental", "property sale"];
 
-      if (elems.length === 3) {
-        this.attributes["type"] = "general";
-        this.getGeneral(elems);
-
-      } else if (elems.length === 8) {
+      if (elems.length >= 15) {
+        this.getProperty(elems);
+      } else if (elems.length >= 8) {
         this.attributes["type"] = "vehicle";
         this.getVehicle(elems);
-
-      } else if (elems.length === 15) {
-        this.getProperty(elems);
+      } else if (elems.length >= 3) {
+        this.attributes["type"] = "general";
+        this.getGeneral(elems);
       }
     }
 
@@ -384,11 +803,17 @@
           this.observer.disconnect();
         }
 
+        const button = target.querySelector('[role="button"]');
+        if (button && button.textContent === 'See more') {
+          button.style.cssText = 'background:#ffdddd;';
+        }
+
         this.observer = new MutationObserver((mutations) => {
           mutations.forEach((mutation) => {
             if ((mutation.type === 'characterData') &&
                 (target.textContent.length > this.attributes["description"].length)) {
               this.attributes["description"] = target.textContent;
+              button.style.cssText = '';
               this.analyzeAttrs();
             }
             console.log(this.attributes);
@@ -424,11 +849,12 @@
     analyzeAttrs() {
       const currentYear = new Date().getFullYear();
       this.scamScore = 0; // Needs to be placed here in case the description's text is updated
+      this.concerningKeywords = [];
       this.redFlags = [];
       this.conclusion = "";
 
       if (!this.attributes["user rating"]) {
-        this.scamScore += 0.2;
+        this.scamScore += 0.15;
         this.redFlags.push("Non-reputable seller");
       }
 
@@ -448,13 +874,18 @@
 
       t1Keywords.forEach((t1) => {
         if (descriptionLower.includes(t1)) {
-          this.scamScore += 0.05;
+          this.scamScore += 0.10;
+          this.concerningKeywords.push(t1);
         }
       });
 
       t2Keywords.forEach((t2) => {
         if (descriptionLower.includes(t2)) {
-          this.scamScore += 0.025;
+          this.scamScore += 0.05;
+          this.concerningKeywords.push(t2);
+          if (t2 === "or best offer" || t2 === "obo") {
+            this.redFlags.push("You will likely be pressured to pay more than listed price.");
+          }
         }
       });
 
@@ -481,12 +912,32 @@
       }
 
       if (this.scamScore <= 0.2) {
-        this.conclusion = "Most likely safe";
+        this.conclusion = "Most likely safe.";
       } else if (this.scamScore <= 0.4) {
         this.conclusion = "Scam possible, proceed with caution.";
       } else {
         this.conclusion = "Scam likely. Use extreme caution or find a different listing.";
       }
+
+      this.displayResults();
+    }
+
+    displayResults() {
+      const resultsDiv = document.getElementById('analysis-results-container');
+      if (!resultsDiv) {
+        console.error("Results container not found");
+        return;
+      }
+      resultsDiv.textContent = ""; // Clear previous results
+
+      resultsDiv.innerHTML = `
+      <p><strong>Disclaimer:</strong> This does not take price analysis results into consideration. 
+      If the price is flagged as too good to be true, it may be a scam.</p>
+      <p><strong>Scam Score:</strong> ${(this.scamScore * 100).toFixed(2)}%</p>
+      <p><strong>Conclusion:</strong> ${this.conclusion}</p>
+      <p><strong>Red Flags:</strong> ${this.redFlags.length > 0 ? this.redFlags.join("; ") : "None"}</p>
+      <p><strong>Concerning Keywords:</strong> ${this.concerningKeywords.length > 0 ? this.concerningKeywords.join(", ") : "None"}</p>
+    `;
     }
   }
 
@@ -526,6 +977,7 @@
         config.highlightColors.neutral = hexToRgba(settings.avgDealColor, 0.2);
         config.highlightColors.overpriced = hexToRgba(settings.overpricedColor, 0.2);
         config.highlightColors.potentialScam = hexToRgba(settings.scamColor, 0.2);
+        config.minPriceForAnalysis = settings.minPriceForAnalysis || 50;
 
         listingAnalyzer.config = config; // Update config in analyzers
         listingListAnalyzer.config = config;
@@ -535,16 +987,16 @@
 
   function addScrapeButtons(overlay) {
     const scrapeListingsBtn = document.createElement('button');
-    scrapeListingsBtn.textContent = 'Scrape Listings';
+    scrapeListingsBtn.textContent = 'Analyze Listing Prices';
     scrapeListingsBtn.id = 'scrape-listings-btn';
-    scrapeListingsBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-bottom:8px;';
+    scrapeListingsBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-bottom:8px;display:block;';
     overlay.appendChild(scrapeListingsBtn);
     scrapeListingsBtn.addEventListener('click', scrapeListings);
 
     const scrapeSingleBtn = document.createElement('button');
     scrapeSingleBtn.textContent = 'Analyze Single Listing';
     scrapeSingleBtn.id = 'scrape-single-btn';
-    scrapeSingleBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-left:8px;margin-bottom:8px;';
+    scrapeSingleBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-bottom:8px;display:block;';
     overlay.appendChild(scrapeSingleBtn);
     scrapeSingleBtn.addEventListener('click', scrapeSingleListing);
   }
@@ -583,7 +1035,10 @@
     clearBtn.style.cssText = baseBtnCss() + 'background:#ff6b6b;color:#fff;margin-top:10px;';
     overlay.appendChild(clearBtn);
     clearBtn.addEventListener('click', () => {
-      if (listingListAnalyzer) listingListAnalyzer.clearPersistentListings();
+      if (listingListAnalyzer) {
+        listingListAnalyzer.clearPersistentListings();
+        updateStatus('Cleared detected listings.', 'success');
+      }
     });
 
     const toggleBtn = document.createElement('button');
@@ -615,6 +1070,47 @@
     });
   }
 
+  function addHeaderandContainer(resultsDiv) {
+    const header = document.createElement('h2');
+    header.textContent = 'Analysis Results';
+    resultsDiv.appendChild(header);
+
+    const resultsContainer = document.createElement('div');
+    resultsContainer.id = 'analysis-results-container';
+    resultsContainer.style.cssText = 
+      `padding:10px;width:300px;border:1px solid #ccc;background-color:#f9f9f9;`;
+    resultsContainer.textContent = 'No results available yet.';
+    resultsDiv.appendChild(resultsContainer);
+  }
+
+  function addToggleBtns(resultsDiv) {
+    const toggleBtn = document.createElement('button');
+    toggleBtn.textContent = 'Toggle Results';
+    toggleBtn.id = 'results-toggle-btn';
+    toggleBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-left:10px;margin-bottom:10px;margin-top:4px;';
+    resultsDiv.appendChild(toggleBtn);
+    toggleBtn.addEventListener('click', () => {
+      resultsDiv.style.display = resultsDiv.style.display === 'none' ? 'block' : 'none';
+      const reopenTab = document.getElementById('results-reopen-tab');
+      if (reopenTab) reopenTab.style.display = resultsDiv.style.display === 'none' ? 'block' : 'none';
+    });
+
+    const reopenTab = document.createElement('button');
+    reopenTab.textContent = 'Results';
+    reopenTab.id = 'results-reopen-tab';
+    reopenTab.style.cssText = `
+    position: fixed; bottom: 12px; left: 12px; z-index: 2147483647;
+    background:#0b5cff;color:#fff;border:none;border-radius:6px;padding:6px 10px;
+    box-shadow:0 4px 12px rgba(0,0,0,.18); font:12px system-ui,sans-serif;
+    display: none;
+  `;
+    document.body.appendChild(reopenTab);
+    reopenTab.addEventListener('click', () => {
+      resultsDiv.style.display = 'block';
+      reopenTab.style.display = 'none';
+    });
+  }
+
   // Initialize the overlay
   function initOverlay() {
     loadSettings();
@@ -631,9 +1127,23 @@
   `;
     document.body.appendChild(overlay);
 
+    const analysisResults = document.createElement('div');
+    analysisResults.id = 'marketplace-analyzer-results';
+    analysisResults.style.cssText = `
+    position: fixed; bottom: 12px; left: 12px; z-index: 2147483647;
+    background:#fff; border:1px solid #ddd; border-radius:10px; padding:12px;
+    box-shadow:0 6px 20px rgba(0,0,0,.15); font:13px/1.35 system-ui,sans-serif;
+    min-width: 220px;
+  `;
+    document.body.appendChild(analysisResults);
+
     addScrapeButtons(overlay); // Add overlay components
     addStatus(overlay);
     addQoLFeatures(overlay);
+
+
+    addHeaderandContainer(analysisResults);
+    addToggleBtns(analysisResults);
   }
 
   function baseBtnCss() {
@@ -667,6 +1177,11 @@
   checkReadyState();
 
   function scrapeListings() { // Requires: An item has been searched for
+    const resultsDiv = document.getElementById('analysis-results-container');
+    resultsDiv.innerHTML = '';
+    resultsDiv.textContent = 'No results available yet.';
+    // Clear results first
+
     let prevKeyword = listingListAnalyzer.currentKeyword;
     let errorMsg;
     console.log('Scrape listings action received');
@@ -709,7 +1224,7 @@
       console.log('All detected listings:', listingListAnalyzer.allDetectedListings);
     } catch (error) {
       console.error('Error scraping listings:', error);
-      updateStatus('Please contact us if you see this error message.', 'error');
+      updateStatus('Try refreshing the page. If that does not work, please contact us.', 'error');
     }
   }
 
@@ -728,7 +1243,7 @@
       console.log(listingAnalyzer.getScamScore());
     } catch (error) {
       console.error('Error analyzing single listing:', error);
-      updateStatus('Please contact us if you see this error message.', 'error');
+      updateStatus('Try refreshing the page. If that does not work, please contact us.', 'error');
     }
   }
 

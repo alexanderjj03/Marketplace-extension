@@ -36,6 +36,7 @@ function loadSettings() {
       config.highlightColors.neutral = hexToRgba(settings.avgDealColor, 0.2);
       config.highlightColors.overpriced = hexToRgba(settings.overpricedColor, 0.2);
       config.highlightColors.potentialScam = hexToRgba(settings.scamColor, 0.2);
+      config.minPriceForAnalysis = settings.minPriceForAnalysis || 50;
 
       listingAnalyzer.config = config; // Update config in analyzers
       listingListAnalyzer.config = config;
@@ -45,16 +46,16 @@ function loadSettings() {
 
 function addScrapeButtons(overlay) {
   const scrapeListingsBtn = document.createElement('button');
-  scrapeListingsBtn.textContent = 'Scrape Listings';
+  scrapeListingsBtn.textContent = 'Analyze Listing Prices';
   scrapeListingsBtn.id = 'scrape-listings-btn';
-  scrapeListingsBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-bottom:8px;';
+  scrapeListingsBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-bottom:8px;display:block;';
   overlay.appendChild(scrapeListingsBtn);
   scrapeListingsBtn.addEventListener('click', scrapeListings);
 
   const scrapeSingleBtn = document.createElement('button');
   scrapeSingleBtn.textContent = 'Analyze Single Listing';
   scrapeSingleBtn.id = 'scrape-single-btn';
-  scrapeSingleBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-left:8px;margin-bottom:8px;';
+  scrapeSingleBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-bottom:8px;display:block;';
   overlay.appendChild(scrapeSingleBtn);
   scrapeSingleBtn.addEventListener('click', scrapeSingleListing);
 }
@@ -93,7 +94,10 @@ function addQoLFeatures(overlay) {
   clearBtn.style.cssText = baseBtnCss() + 'background:#ff6b6b;color:#fff;margin-top:10px;';
   overlay.appendChild(clearBtn);
   clearBtn.addEventListener('click', () => {
-    if (listingListAnalyzer) listingListAnalyzer.clearPersistentListings();
+    if (listingListAnalyzer) {
+      listingListAnalyzer.clearPersistentListings();
+      updateStatus('Cleared detected listings.', 'success');
+    }
   });
 
   const toggleBtn = document.createElement('button');
@@ -125,6 +129,47 @@ function addQoLFeatures(overlay) {
   });
 }
 
+function addHeaderandContainer(resultsDiv) {
+  const header = document.createElement('h2');
+  header.textContent = 'Analysis Results';
+  resultsDiv.appendChild(header);
+
+  const resultsContainer = document.createElement('div');
+  resultsContainer.id = 'analysis-results-container';
+  resultsContainer.style.cssText = 
+    `padding:10px;width:300px;border:1px solid #ccc;background-color:#f9f9f9;`;
+  resultsContainer.textContent = 'No results available yet.';
+  resultsDiv.appendChild(resultsContainer);
+}
+
+function addToggleBtns(resultsDiv) {
+  const toggleBtn = document.createElement('button');
+  toggleBtn.textContent = 'Toggle Results';
+  toggleBtn.id = 'results-toggle-btn';
+  toggleBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-left:10px;margin-bottom:10px;margin-top:4px;';
+  resultsDiv.appendChild(toggleBtn);
+  toggleBtn.addEventListener('click', () => {
+    resultsDiv.style.display = resultsDiv.style.display === 'none' ? 'block' : 'none';
+    const reopenTab = document.getElementById('results-reopen-tab');
+    if (reopenTab) reopenTab.style.display = resultsDiv.style.display === 'none' ? 'block' : 'none';
+  });
+
+  const reopenTab = document.createElement('button');
+  reopenTab.textContent = 'Results';
+  reopenTab.id = 'results-reopen-tab';
+  reopenTab.style.cssText = `
+    position: fixed; bottom: 12px; left: 12px; z-index: 2147483647;
+    background:#0b5cff;color:#fff;border:none;border-radius:6px;padding:6px 10px;
+    box-shadow:0 4px 12px rgba(0,0,0,.18); font:12px system-ui,sans-serif;
+    display: none;
+  `;
+  document.body.appendChild(reopenTab);
+  reopenTab.addEventListener('click', () => {
+    resultsDiv.style.display = 'block';
+    reopenTab.style.display = 'none';
+  });
+}
+
 // Initialize the overlay
 function initOverlay() {
   loadSettings();
@@ -141,9 +186,23 @@ function initOverlay() {
   `;
   document.body.appendChild(overlay);
 
+  const analysisResults = document.createElement('div');
+  analysisResults.id = 'marketplace-analyzer-results';
+  analysisResults.style.cssText = `
+    position: fixed; bottom: 12px; left: 12px; z-index: 2147483647;
+    background:#fff; border:1px solid #ddd; border-radius:10px; padding:12px;
+    box-shadow:0 6px 20px rgba(0,0,0,.15); font:13px/1.35 system-ui,sans-serif;
+    min-width: 220px;
+  `;
+  document.body.appendChild(analysisResults);
+
   addScrapeButtons(overlay); // Add overlay components
   addStatus(overlay);
   addQoLFeatures(overlay);
+
+
+  addHeaderandContainer(analysisResults);
+  addToggleBtns(analysisResults);
 }
 
 function baseBtnCss() {
@@ -177,6 +236,11 @@ function checkReadyState() {
 checkReadyState();
 
 function scrapeListings() { // Requires: An item has been searched for
+  const resultsDiv = document.getElementById('analysis-results-container');
+  resultsDiv.innerHTML = '';
+  resultsDiv.textContent = 'No results available yet.';
+  // Clear results first
+
   let prevKeyword = listingListAnalyzer.currentKeyword;
   let errorMsg;
   console.log('Scrape listings action received');
@@ -219,7 +283,7 @@ function scrapeListings() { // Requires: An item has been searched for
     console.log('All detected listings:', listingListAnalyzer.allDetectedListings);
   } catch (error) {
     console.error('Error scraping listings:', error);
-    updateStatus('Please contact us if you see this error message.', 'error');
+    updateStatus('Try refreshing the page. If that does not work, please contact us.', 'error');
   }
 }
 
@@ -238,7 +302,7 @@ function scrapeSingleListing() {
     console.log(listingAnalyzer.getScamScore());
   } catch (error) {
     console.error('Error analyzing single listing:', error);
-    updateStatus('Please contact us if you see this error message.', 'error');
+    updateStatus('Try refreshing the page. If that does not work, please contact us.', 'error');
   }
 }
 
