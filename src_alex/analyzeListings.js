@@ -261,10 +261,10 @@ export class ListingListAnalyzer {
       const yearMatch = title.match(/\b(19|20)\d{2}\b/);
       const year = yearMatch ? parseInt(yearMatch[0]) : null;
 
-      let multiplier = ((mileageInKms > 0 ? Math.pow(2, mileageInKms/130000) : 1.5) * (year ? (1 + Math.min((new Date().getFullYear() - year) * 0.08, 0.4)) : 1.5));
+      let multiplier = ((mileageInKms > 0 ? Math.pow(2, mileageInKms/130000) : 1.5) * (year ? Math.pow(1.06, (new Date().getFullYear() - year)) : 1.5));
 
       // Modify the price in place based on year and mileage for normalization
-      let adjustedPrice = price * Math.min(multiplier, 30);
+      let adjustedPrice = price * Math.min(multiplier, 40);
 
       listingCopy.price = adjustedPrice;
       processedListings.push(listingCopy);

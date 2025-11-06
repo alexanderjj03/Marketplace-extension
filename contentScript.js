@@ -279,7 +279,7 @@ function scrapeListings() { // Requires: An item has been searched for
   try {
     listingListAnalyzer.scrapeListingsWithPersistence();
     listingListAnalyzer.observeListings();
-    updateStatus("Success! Observer is active. Scroll to load more listings.", "success");
+    updateStatus("Success! Observer is active. Scroll to load more listings. Click 'clear list' to stop scanning.", "success");
     console.log('All detected listings:', listingListAnalyzer.allDetectedListings);
   } catch (error) {
     console.error('Error scraping listings:', error);
