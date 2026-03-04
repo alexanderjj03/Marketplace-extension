@@ -35,5 +35,8 @@
   "bugs": {
     "url": "https://github.com/yourusername/my-chrome-extension/issues"
   },
-  "homepage": "https://github.com/yourusername/my-chrome-extension#readme"
+  "homepage": "https://github.com/yourusername/my-chrome-extension#readme",
+  "dependencies": {
+    "openai": "^6.25.0"
+  }
 }

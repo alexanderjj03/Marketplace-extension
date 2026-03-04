@@ -1,140 +1,16 @@
-export class ListingListAnalyzer {
-  // Minimal config with sensible defaults
-  constructor(config) {
-    this.config = config;
-    this.observer = null;
-    this.currentKeyword = "";
-    this.allDetectedListings = [];
-    this.uniqueListings = new Set();
-    this._pendingScan = false;
-  }
+import {median, highlightListing} from './utils.js';
 
-  // Start observing the listings container (fallback to body) with throttled rescans
-  observeListings() {
-    if (this.observer) {
-      this.observer.disconnect();
-      console.log("Observer disconnected");
-    }
+export class noAIAnalyzer {
 
-    const container =
-      document.querySelector('[aria-label="Collection of Marketplace items"]') || document.body;
-
-    this.observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (m.addedNodes && m.addedNodes.length) {
-          if (!this._pendingScan) {
-            this._pendingScan = true;
-            requestAnimationFrame(() => {
-              this._pendingScan = false;
-              this.scrapeListingsWithPersistence();
-            });
-          }
-          break;
-        }
-      }
-    });
-
-    this.observer.observe(container, { childList: true, subtree: true });
-    console.log("Observer started on", container === document.body ? "document.body (fallback)" : "Marketplace items container");
-  }
-
-  // Scrape visible listings, persist/dedupe, then analyze prices and scams
-  scrapeListingsWithPersistence() {
-    const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, ' ').trim();
-    const col = document.querySelector('[aria-label="Collection of Marketplace items"]');
-    if (!col) return;
-
-    const listings = col.querySelectorAll('[data-virtualized="false"]');
-    const currentListings = [];
-
-    listings.forEach((listing) => {
-      const hrefElem = listing.querySelector('a[href]');
-      const href = hrefElem ? hrefElem.getAttribute('href') : null;
-      const id = `${norm(href.split('/')[3])}`;
-      if (!href || !href.includes('marketplace/item/')) return;
-
-      const details = listing.querySelectorAll('[dir="auto"]');
-      if (!details || !details.length) return;
-
-      const contents = [];
-      details.forEach((d) => contents.push(String(d.textContent || "").toLowerCase().trim()));
-
-      let idx = 0;
-      while (
-        idx < contents.length &&
-        (contents[idx] === "just listed" ||
-         (parseFloat(contents[idx].replace(/[^0-9.]/g, '')) || 0) === 0)
-      ) {
-        idx += 1;
-      }
-      if (idx >= contents.length) return;
-
-      const price = parseFloat(contents[idx].replace(/[^0-9.]/g, '')) || 0;
-
-      const titleCandidate = contents[idx + 1] ?? "";
-      const altCandidate = contents[idx + 2] ?? "";
-      let title = ".";
-
-      const currentKeywordList = this.currentKeyword.split(' ');
-
-      for (const kw of currentKeywordList) { // Extracting title based on search keywords
-        if (titleCandidate.includes(kw)) {
-          title = titleCandidate;
-          break;
-        }
-      }
-
-      if (title === ".") {
-        for (const kw of currentKeywordList) {
-          if (altCandidate.includes(kw)) {
-            title = altCandidate;
-            idx += 1;
-            break;
-          }
-        }
-      }
-
-      if (title === ".") {
-        this.resetListingStyle(listing);
-        return;
-      }
-
-      const other = (idx + 3 < contents.length) ? (contents[idx + 3] ?? "") : ""; // Additional info (e.g. number of km on a car)
-      currentListings.push({ price, title, id, other, element: listing });
-    });
-
-    // Further analysis for certain cases (e.g. cars, computer parts, properties)
-
-    this.addNewListingsToPersistentList(currentListings);
-
-    if (this.allDetectedListings.length >= 5) {
-      this.analyzeAllListingsPrices(currentListings);
-    }
-
-    this.detectPotentialScams();
-  }
-
-  // Dedupe & persist newly seen listings
-  addNewListingsToPersistentList(newListings) {
-    newListings.forEach((listing) => {
-      if (!this.uniqueListings.has(listing.id)) {
-        this.uniqueListings.add(listing.id);
-        this.allDetectedListings.push({
-          ...listing,
-          detectedAt: Date.now()
-        });
-      }
-    });
-
-    console.log('All detected listings (count):', this.allDetectedListings.length);
-    this.updateListingsCounter();
+  constructor(scraper) {
+    this.scraper = scraper;
   }
 
   // Enhanced price analysis with category-specific formulas (made up formulas for now lol!!) for better deal detection
   analyzeAllListingsPrices(curListings) {
-    const prices = this.allDetectedListings
+    const prices = this.scraper.allDetectedListings
       .map(i => i.price)
-      .filter(p => p > this.config.minPriceForAnalysis);
+      .filter(p => p > this.scraper.config.minPriceForAnalysis);
 
     if (prices.length < 5) return;
 
@@ -143,7 +19,7 @@ export class ListingListAnalyzer {
     const mad = median(prices.map(p => Math.abs(p - med))) || 1; 
 
     // Detect category (based off of currentKeyword)
-    const category = this.detectListingCategory(this.currentKeyword);
+    const category = this.detectListingCategory(this.scraper.currentKeyword);
 
     let priceNormalizedListings = [];
     if (category === 'car') {
@@ -232,7 +108,7 @@ export class ListingListAnalyzer {
   // Further preprocessing for car listings if needed (price adjustment based on year/mileage)
   preprocessCarListings() {  
     let processedListings = [];
-    for (const listing of this.allDetectedListings) {
+    for (const listing of this.scraper.allDetectedListings) {
       let listingCopy = {...listing};
 
       const title = listing.title;
@@ -280,7 +156,7 @@ export class ListingListAnalyzer {
     const listing = priceNormalizedListings.find(l => l.id === listingId);
     const prices = priceNormalizedListings
       .map(i => i.price)
-      .filter(p => p > this.config.minPriceForAnalysis);
+      .filter(p => p > this.scraper.config.minPriceForAnalysis);
     const medianPrice = median(prices);
 
     if (!listing || !medianPrice || medianPrice <= 0) {
@@ -492,10 +368,10 @@ export class ListingListAnalyzer {
     let dealScore = 0;
     let analysisText = `General Analysis: $${price.toLocaleString()}`;
     
-    if (z <= -this.config.robustZGood) {
+    if (z <= -this.scraper.config.robustZGood) {
       dealScore += 20;
       analysisText += ` | Good deal (${Math.round(savingsPercent)}% below median)`;
-    } else if (z >= this.config.robustZBad) {
+    } else if (z >= this.scraper.config.robustZBad) {
       dealScore -= 20;
       analysisText += ` | Overpriced (${Math.round(Math.abs(savingsPercent))}% above median)`;
     } else {
@@ -546,49 +422,49 @@ export class ListingListAnalyzer {
     let color, message;
     
     if (savingsPercent >= savingsThreshold) {
-      color = this.config.highlightColors.potentialScam;
+      color = this.scraper.config.highlightColors.potentialScam;
       message = `🚨 Too good to be true (probable scam/inaccurate listed price): ${text}`;
     } else if (score >= 25) {
-      color = this.config.highlightColors.goodDeal;
+      color = this.scraper.config.highlightColors.goodDeal;
       message = `🔥 EXCELLENT DEAL: ${text}`;
     } else if (score >= 10) {
-      color = this.config.highlightColors.goodDeal;
+      color = this.scraper.config.highlightColors.goodDeal;
       message = `✅ Good Deal: ${text}`;
     } else if (score >= 0) {
-      color = this.config.highlightColors.neutral;
+      color = this.scraper.config.highlightColors.neutral;
       message = `👍 Fair Deal: ${text}`;
     } else if (score <= -20) {
-      color = this.config.highlightColors.overpriced;
+      color = this.scraper.config.highlightColors.overpriced;
       message = `⚠️ Overpriced: ${text}`;
     } else if (score <= -10) {
-      color = this.config.highlightColors.overpriced;
+      color = this.scraper.config.highlightColors.overpriced;
       message = `💰 High Price: ${text}`;
     } else {
-      color = this.config.highlightColors.neutral;
+      color = this.scraper.config.highlightColors.neutral;
       message = `📊 ${text}`;
     }
     
-    this.highlightListing(listing.element, color, message);
+    highlightListing(listing.element, color, message);
   }
 
   //  scam detection (keywords + “too-good-to-be-true” relative floor)
   detectPotentialScams() {
-    const baselinePrices = this.allDetectedListings
+    const baselinePrices = this.scraper.allDetectedListings
       .map(i => i.price)
-      .filter(p => p > this.config.minPriceForAnalysis);
+      .filter(p => p > this.scraper.config.minPriceForAnalysis);
 
     const haveBaseline = baselinePrices.length >= 5;
     const med = haveBaseline ? median(baselinePrices) : null;
 
-    this.allDetectedListings.forEach(item => {
+    this.scraper.allDetectedListings.forEach(item => {
       const title = String(item.title || "").toLowerCase();
-      const keywordHit = this.config.scamKeywords.some(kw => title.includes(kw));
+      const keywordHit = this.scraper.config.scamKeywords.some(kw => title.includes(kw));
       const suspiciousPrice = this.isSuspiciousPrice(item.price, title, med);
 
       if (keywordHit || suspiciousPrice) {
-        this.highlightListing(
+        highlightListing(
           item.element,
-          this.config.highlightColors.potentialScam,
+          this.scraper.config.highlightColors.potentialScam,
           'Potential scam - review carefully'
         );
       }
@@ -607,66 +483,4 @@ export class ListingListAnalyzer {
     }
     return price < 50;
   }
-
-  // Styling helpers with stale-node guards
-  highlightListing(element, color, tooltip) {
-    if (!element || !document.contains(element)) return;
-    element.style.backgroundColor = color;
-    element.style.border = '2px solid ' + safeOpaque(color);
-    element.title = tooltip;
-  }
-
-  resetListingStyle(element) {
-    if (!element || !document.contains(element)) return;
-    element.style.backgroundColor = '';
-    element.style.border = '';
-    element.title = '';
-  }
-
-  // UI counter update
-  updateListingsCounter() {
-    const counter = document.getElementById('listings-counter');
-    if (counter) {
-      counter.textContent = `Detected Listings: ${this.allDetectedListings.length}`;
-    }
-  }
-
-  // Clear data and remove any residual highlights
-  clearPersistentListings() {
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = null;
-      console.log("Observer disconnected");
-    }
-
-    this.allDetectedListings.forEach(item => this.resetListingStyle(item.element));
-    this.allDetectedListings = [];
-    this.uniqueListings.clear();
-    this.updateListingsCounter();
-  }
-
-  // Public setter for keyword filter (empty string disables filtering)
-  setKeywordFilter(keyword = "") {
-    this.currentKeyword = String(keyword || "").toLowerCase().trim();
-  }
-}
-
-/* ---------- utilities ---------- */
-function median(arr) {
-  const a = [...arr].sort((x, y) => x - y);
-  const n = a.length;
-  if (n === 0) return 0;
-  const mid = Math.floor(n / 2);
-  return n % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
-}
-
-function round2(x) {
-  return Math.round(x * 100) / 100;
-}
-
-function safeOpaque(rgba) {
-  const m = typeof rgba === 'string' ? rgba.match(/^rgba\(\s*([0-9.\s]+),\s*([0-9.\s]+),\s*([0-9.\s]+),\s*([0-9.\s]+)\s*\)$/i) : null;
-  if (!m) return rgba;
-  const r = +m[1], g = +m[2], b = +m[3];
-  return `rgba(${r}, ${g}, ${b}, 0.8)`;
 }

@@ -1,6 +1,6 @@
 // Configuration
-import { ListingListAnalyzer } from "./src_alex/analyzeListings.js";
-import { ListingAnalyzer } from "./src_alex/analyzeSingleListing.js";
+import { ListingListScraper } from "./src_alex/multipleListings/scrapeListings.js";
+import { ListingAnalyzer } from "./src_alex/singleListing/analyzeSingleListing.js";
 
 let config = { // default config
   highlightColors: {
@@ -18,7 +18,7 @@ let config = { // default config
 // State
 let overlayVisible = true;
 let listingAnalyzer = new ListingAnalyzer(config);
-let listingListAnalyzer = new ListingListAnalyzer(config);
+let listingListScraper = new ListingListScraper(config);
 
 // Helper
 function hexToRgba(hex, alpha) {
@@ -39,7 +39,7 @@ function loadSettings() {
       config.minPriceForAnalysis = settings.minPriceForAnalysis || 50;
 
       listingAnalyzer.config = config; // Update config in analyzers
-      listingListAnalyzer.config = config;
+      listingListScraper.config = config;
     }
   });
 }
@@ -94,8 +94,8 @@ function addQoLFeatures(overlay) {
   clearBtn.style.cssText = baseBtnCss() + 'background:#ff6b6b;color:#fff;margin-top:10px;';
   overlay.appendChild(clearBtn);
   clearBtn.addEventListener('click', () => {
-    if (listingListAnalyzer) {
-      listingListAnalyzer.clearPersistentListings();
+    if (listingListScraper) {
+      listingListScraper.clearPersistentListings();
       updateStatus('Cleared detected listings.', 'success');
     }
   });
@@ -241,7 +241,7 @@ function scrapeListings() { // Requires: An item has been searched for
   resultsDiv.textContent = 'No results available yet.';
   // Clear results first
 
-  let prevKeyword = listingListAnalyzer.currentKeyword;
+  let prevKeyword = listingListScraper.currentKeyword;
   let errorMsg;
   console.log('Scrape listings action received');
 
@@ -261,8 +261,8 @@ function scrapeListings() { // Requires: An item has been searched for
     errorMsg = 'Search input not found. Please perform a search first.';
   }
 
-  listingListAnalyzer.currentKeyword = search.value.toString().trim().toLowerCase();
-  if (!listingListAnalyzer.currentKeyword) {
+  listingListScraper.currentKeyword = search.value.toString().trim().toLowerCase();
+  if (!listingListScraper.currentKeyword) {
     errorMsg = 'No search keyword found. Please search for an item first.';
   }
 
@@ -272,15 +272,15 @@ function scrapeListings() { // Requires: An item has been searched for
   }
 
   // Clear previous listings when starting a new search
-  if (prevKeyword !== listingListAnalyzer.currentKeyword) {
-    listingListAnalyzer.clearPersistentListings();
+  if (prevKeyword !== listingListScraper.currentKeyword) {
+    listingListScraper.clearPersistentListings();
   }
 
   try {
-    listingListAnalyzer.scrapeListingsWithPersistence();
-    listingListAnalyzer.observeListings();
+    listingListScraper.scrapeListingsWithPersistence();
+    listingListScraper.observeListings();
     updateStatus("Success! Observer is active. Scroll to load more listings. Click 'clear list' to stop scanning.", "success");
-    console.log('All detected listings:', listingListAnalyzer.allDetectedListings);
+    console.log('All detected listings:', listingListScraper.allDetectedListings);
   } catch (error) {
     console.error('Error scraping listings:', error);
     updateStatus('Try refreshing the page. If that does not work, please contact us.', 'error');
