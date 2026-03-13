@@ -1,5 +1,6 @@
-import {resetListingStyle, updateListingsCounter} from './utils.js';
+import {resetListingStyle} from './utils.js';
 import {noAIAnalyzer} from './noAI_analyze.js';
+import {AIAnalyzer} from './AI_analyze.js';
 
 export class ListingListScraper {
   // Minimal config with sensible defaults. 
@@ -117,7 +118,7 @@ export class ListingListScraper {
     // Further analysis for certain cases (e.g. cars, computer parts, properties)
 
     this.addNewListingsToPersistentList(currentListings);
-    this.noAIAnalyze(currentListings);
+    this.aIAnalyze(currentListings);
   }
 
   // Dedupe & persist newly seen listings
@@ -133,7 +134,7 @@ export class ListingListScraper {
     });
 
     console.log('All detected listings (count):', this.allDetectedListings.length);
-    updateListingsCounter();
+    this.updateListingsCounter();
   }
 
   noAIAnalyze(currentListings) {
@@ -145,8 +146,8 @@ export class ListingListScraper {
   }
 
   aIAnalyze(currentListings) {
-    const analyzer = new AIAnalyzer(this);
-    analyzer.analyzeAllListingsPrices(currentListings);
+    const analyzer1 = new AIAnalyzer(this);
+    analyzer1.analyzeAllListingsPrices(currentListings);
   }
 
   // Clear data and remove any residual highlights
@@ -160,7 +161,14 @@ export class ListingListScraper {
     this.allDetectedListings.forEach(item => resetListingStyle(item.element));
     this.allDetectedListings = [];
     this.uniqueListings.clear();
-    updateListingsCounter();
+    this.updateListingsCounter();
+  }
+
+  updateListingsCounter() {
+    const counter = document.getElementById('listings-counter');
+    if (counter) {
+      counter.textContent = `Detected Listings: ${this.allDetectedListings.length}`;
+    }
   }
 
   // Public setter for keyword filter (empty string disables filtering)

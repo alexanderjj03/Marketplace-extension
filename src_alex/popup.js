@@ -100,16 +100,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const overpricedColor = document.getElementById('overpricedColor');
             const scamColor = document.getElementById('scamColor');
             const minPrice = document.getElementById('minPriceInput');
+            const apiKey = document.getElementById('apiKeyInput');
 
             const settings = {
                 goodDealColor: goodDealColor.value,
                 avgDealColor: avgDealColor.value,
                 overpricedColor: overpricedColor.value,
                 scamColor: scamColor.value,
-                minPriceForAnalysis: parseFloat(minPrice.value) || 0
+                minPriceForAnalysis: parseFloat(minPrice.value) || 0,
             };
 
             await chrome.storage.sync.set({ marketplaceColorSettings: settings });
+            await chrome.storage.local.set({ apiKey: apiKey.value || '' });
         } catch (error) {
             console.error('Error saving settings:', error);
             updateStatus('Failed to save settings', 'error');

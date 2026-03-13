@@ -7314,8 +7314,6 @@
     OpenAI.Skills = Skills;
     OpenAI.Videos = Videos;
 
-    new OpenAI();
-
     /* ---------- utilities ---------- */
     function median(arr) {
       const a = [...arr].sort((x, y) => x - y);
@@ -7347,11 +7345,24 @@
       element.title = '';
     }
 
-    // UI counter update
-    function updateListingsCounter() {
-      const counter = document.getElementById('listings-counter');
-      if (counter) {
-        counter.textContent = `Detected Listings: ${this.allDetectedListings.length}`;
+    async function callModel(prompt) {
+      const apiKey = await chrome.storage.local.get('apiKey');
+      const client = new OpenAI({
+        apiKey: apiKey.apiKey,
+        dangerouslyAllowBrowser: true
+      }); // find a secure method for this, such as an env variable/chrome storage. Make a new API key after tests are done.
+
+      try {
+        const response = await client.responses.create({
+          model: "gpt-4o-mini",
+          input: prompt,
+          temperature: 0.5
+        });
+
+        return response.output_text.trim();
+      } catch (error) {
+        console.error("Error calling OpenAI API:", error);
+        return null;
       }
     }
 
@@ -7383,7 +7394,7 @@
         } // Preprocess car listings
 
         curListings.forEach((listing) => {
-          if (listing.price < this.config.minPriceForAnalysis) return;
+          if (listing.price < this.scraper.config.minPriceForAnalysis) return;
           
           // Get category-specific analysis results
           const analysisResult = this.analyzeCategorySpecificPrice(listing, category, med, mad, priceNormalizedListings);
@@ -7840,6 +7851,71 @@
       }
     }
 
+    class AIAnalyzer { // TO DO: Upgrade model (maybe), refactor the rest of the extension to accomodate AI analysis option.
+      constructor(scraper) {
+        this.scraper = scraper;
+      }
+
+      async analyzeAllListingsPrices(currentListings) {
+        // Placeholder for AI analysis logic. In a real implementation, this would involve:
+        // 1. Preparing the data (e.g., extracting relevant features from listings)
+        // 2. Making a call to an AI service (e.g., OpenAI API) to get price analysis
+        // 3. Processing the response and updating the UI accordingly
+        
+        // For demonstration, we'll just calculate the median price and highlight listings below it.
+        this.processOdometerInfo(currentListings);
+
+        const relevantInfo = currentListings.map(l => `Title: ${l.title}, ID: ${l.id}, Price: ${l.price}, Other: ${l.other}`).join('\n');
+        if (relevantInfo.length === 0) return;
+
+        console.log(relevantInfo);
+
+        const prompt = `Analyze the following Facebook Marketplace listings and determine the quality of each deal. The "other" field is only 
+    populated for car listings, in which case it contains the car's mileage in kilometers. Otherwise, it is left blank. Give each listing a score 
+    from 1 to 100 based on its pricing relative to the market, taking into account any risks or unknown factors such as condition or demand.
+    If the price is too low to be realistic, assign a score of -1. 
+    Return ONLY a JSON object with the listing ID's as keys and their scores as values:\n\n${relevantInfo}`;
+
+        const aiResponse = await callModel(prompt);
+        console.log("AI Analysis Response:", aiResponse);
+
+        const medianPrice = 1000;
+        currentListings.forEach(listing => {
+          if (listing.price < medianPrice) {
+            highlightListing(listing.element);
+          }
+        });
+      }
+
+      // Convert odometer into standardized format.
+      processOdometerInfo(currentListings) {
+        currentListings.forEach(listing => {
+          const odometer = listing.other;
+
+          let mileageInKms = 0;
+          if (odometer && odometer.includes('km')) {
+            let value = odometer.split(' km')[0];
+            if (value.includes('k')) {
+              value = value.replace('k', '');
+              mileageInKms = parseFloat(value) * 1000;
+            } else {
+              mileageInKms = parseFloat(value);
+            }
+          } else if (odometer && odometer.contains('mi')) {
+            let value = odometer.split(' mi')[0];
+            if (value.includes('k')) {
+              value = value.replace('k', '');
+              mileageInKms = parseFloat(value) * 1609.34;
+            } else {
+              mileageInKms = parseFloat(value) * 1.60934;
+            }
+          }
+
+          listing.other = mileageInKms > 0 ? `${mileageInKms} km` : listing.other;
+        });
+      }
+    }
+
     class ListingListScraper {
       // Minimal config with sensible defaults. 
       
@@ -7956,7 +8032,7 @@
         // Further analysis for certain cases (e.g. cars, computer parts, properties)
 
         this.addNewListingsToPersistentList(currentListings);
-        this.noAIAnalyze(currentListings);
+        this.aIAnalyze(currentListings);
       }
 
       // Dedupe & persist newly seen listings
@@ -7972,7 +8048,7 @@
         });
 
         console.log('All detected listings (count):', this.allDetectedListings.length);
-        updateListingsCounter();
+        this.updateListingsCounter();
       }
 
       noAIAnalyze(currentListings) {
@@ -7984,8 +8060,8 @@
       }
 
       aIAnalyze(currentListings) {
-        const analyzer = new AIAnalyzer(this);
-        analyzer.analyzeAllListingsPrices(currentListings);
+        const analyzer1 = new AIAnalyzer(this);
+        analyzer1.analyzeAllListingsPrices(currentListings);
       }
 
       // Clear data and remove any residual highlights
@@ -7999,7 +8075,14 @@
         this.allDetectedListings.forEach(item => resetListingStyle(item.element));
         this.allDetectedListings = [];
         this.uniqueListings.clear();
-        updateListingsCounter();
+        this.updateListingsCounter();
+      }
+
+      updateListingsCounter() {
+        const counter = document.getElementById('listings-counter');
+        if (counter) {
+          counter.textContent = `Detected Listings: ${this.allDetectedListings.length}`;
+        }
       }
 
       // Public setter for keyword filter (empty string disables filtering)

@@ -28,7 +28,7 @@ export class noAIAnalyzer {
     } // Preprocess car listings
 
     curListings.forEach((listing) => {
-      if (listing.price < this.config.minPriceForAnalysis) return;
+      if (listing.price < this.scraper.config.minPriceForAnalysis) return;
       
       // Get category-specific analysis results
       const analysisResult = this.analyzeCategorySpecificPrice(listing, category, med, mad, priceNormalizedListings);

@@ -1,5 +1,4 @@
 import OpenAI from "openai";
-const client = new OpenAI();
 
 /* ---------- utilities ---------- */
 export function median(arr) {
@@ -36,20 +35,17 @@ export function resetListingStyle(element) {
   element.title = '';
 }
 
-// UI counter update
-export function updateListingsCounter() {
-  const counter = document.getElementById('listings-counter');
-  if (counter) {
-    counter.textContent = `Detected Listings: ${this.allDetectedListings.length}`;
-  }
-}
-
 export async function callModel(prompt) {
+  const apiKey = await chrome.storage.local.get('apiKey');
+  const client = new OpenAI({
+    apiKey: apiKey.apiKey,
+    dangerouslyAllowBrowser: true
+  }); // find a secure method for this, such as an env variable/chrome storage. Make a new API key after tests are done.
+
   try {
     const response = await client.responses.create({
       model: "gpt-4o-mini",
       input: prompt,
-      max_tokens: 500,
       temperature: 0.5
     });
 
