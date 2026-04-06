@@ -1,4 +1,4 @@
-import {median, highlightListing, resetListingStyle, callModel} from './utils.js';
+import {highlightListing, callModel} from './utils.js';
 
 export class AIAnalyzer { // TO DO: Upgrade model (maybe), refactor the rest of the extension to accomodate AI analysis option.
   constructor(scraper) {
