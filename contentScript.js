@@ -4,6 +4,7 @@ import { ListingAnalyzer } from "./src_alex/singleListing/analyzeSingleListing.j
 
 let config = { // default config
   highlightColors: {
+    detectedListing: 'rgba(0, 123, 255, 0.2)',
     goodDeal: 'rgba(0,255,0,0.2)',
     neutral: 'rgba(255,255,0,0.2)',
     potentialScam: 'rgba(255,0,0,0.2)',
@@ -50,7 +51,40 @@ function addScrapeButtons(overlay) {
   scrapeListingsBtn.id = 'scrape-listings-btn';
   scrapeListingsBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-bottom:8px;display:block;';
   overlay.appendChild(scrapeListingsBtn);
-  scrapeListingsBtn.addEventListener('click', scrapeListings);
+
+  const useAICheckbox = document.createElement('input');
+  useAICheckbox.type = 'checkbox';
+  useAICheckbox.id = 'use-ai-checkbox';
+  useAICheckbox.style.marginRight = '6px';
+  overlay.appendChild(useAICheckbox);
+  useAICheckbox.checked = false; // Default to not using AI for analysis
+  useAICheckbox.addEventListener('change', () => {
+    listingListScraper.useAI = useAICheckbox.checked;
+    console.log('Use AI for analysis:', listingListScraper.useAI);
+  });
+  
+  const aiLabel = document.createElement('label');
+  aiLabel.htmlFor = 'use-ai-checkbox';
+  aiLabel.textContent = 'Use AI';
+  aiLabel.style.fontSize = '12px';
+  overlay.appendChild(aiLabel);
+
+  scrapeListingsBtn.addEventListener('click', async () => {
+    if (scrapeListingsBtn.textContent == "Analyze Listing Prices" && listingListScraper.useAI) {
+      scrapeListingsBtn.textContent = "Confirm Analysis";
+      useAICheckbox.disabled = true; // Prevent changing AI option after starting scrape
+      scrapeListings();
+    } else if (scrapeListingsBtn.textContent === "Confirm Analysis") {
+      updateStatus('This will take a moment', 'info');
+      scrapeListingsBtn.textContent = "Analyze Listing Prices";
+      await listingListScraper.aIAnalyze(listingListScraper.allDetectedListings);
+      useAICheckbox.disabled = false; // Re-enable AI option after analysis
+      updateStatus('Analysis complete. Click "Clear list" to start a new search.', 'success');
+    } else {
+      useAICheckbox.disabled = true;
+      scrapeListings();
+    }
+  }); // scrapeListings has logic to handle the checkbox state (useAI) upon execution
 
   const scrapeSingleBtn = document.createElement('button');
   scrapeSingleBtn.textContent = 'Analyze Single Listing';
@@ -235,13 +269,12 @@ function checkReadyState() {
 
 checkReadyState();
 
-function scrapeListings() { // Requires: An item has been searched for
+function preExecutionChecks() {
   const resultsDiv = document.getElementById('analysis-results-container');
   resultsDiv.innerHTML = '';
   resultsDiv.textContent = 'No results available yet.';
   // Clear results first
 
-  let prevKeyword = listingListScraper.currentKeyword;
   let errorMsg;
   console.log('Scrape listings action received');
 
@@ -270,16 +303,30 @@ function scrapeListings() { // Requires: An item has been searched for
     updateStatus(errorMsg, "error");
     return;
   }
+}
+
+function scrapeListings() { // Requires: An item has been searched for and the user is on the search results page.
+  let prevKeyword = listingListScraper.currentKeyword;
+
+  preExecutionChecks();
+
+  const useAI = listingListScraper.useAI;
+
+  let message = "Success! Observer is active. Scroll to load more listings. Click 'clear list' to stop scanning.";
+  if (useAI) {
+    message = message + " Click 'Confirm analysis' to analyze listing prices with AI (maximum: 50 listings).";
+  }
 
   // Clear previous listings when starting a new search
-  if (prevKeyword !== listingListScraper.currentKeyword) {
-    listingListScraper.clearPersistentListings();
+  if (prevKeyword !== listingListScraper.currentKeyword || useAI) {
+    listingListScraper.clearPersistentListings(true, useAI); 
+    // Clear listings and reset AI state if keyword changed or if using AI for new analysis
   }
 
   try {
     listingListScraper.scrapeListingsWithPersistence();
     listingListScraper.observeListings();
-    updateStatus("Success! Observer is active. Scroll to load more listings. Click 'clear list' to stop scanning.", "success");
+    updateStatus(message, "success");
     console.log('All detected listings:', listingListScraper.allDetectedListings);
   } catch (error) {
     console.error('Error scraping listings:', error);

@@ -44,9 +44,8 @@ export async function callModel(prompt) {
 
   try {
     const response = await client.responses.create({
-      model: "gpt-4o-mini",
-      input: prompt,
-      temperature: 0.5
+      model: "gpt-5-mini",
+      input: prompt
     });
 
     return response.output_text.trim();

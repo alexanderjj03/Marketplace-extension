@@ -22,17 +22,34 @@ export class AIAnalyzer { // TO DO: Upgrade model (maybe), refactor the rest of 
     const prompt = `Analyze the following Facebook Marketplace listings and determine the quality of each deal. The "other" field is only 
     populated for car listings, in which case it contains the car's mileage in kilometers. Otherwise, it is left blank. Give each listing a score 
     from 1 to 100 based on its pricing relative to the market, taking into account any risks or unknown factors such as condition or demand.
-    If the price is too low to be realistic, assign a score of -1. 
+    If the price is too low to be realistic, assign a score of -1. Assume all prices are in Canadian dollars (CAD).
     Return ONLY a JSON object with the listing ID's as keys and their scores as values:\n\n${relevantInfo}`;
 
     const aiResponse = await callModel(prompt);
     console.log("AI Analysis Response:", aiResponse);
+    const responseJson = JSON.parse(aiResponse);
 
-    const medianPrice = 1000;
+    // NEXT UP: Processing the AI response.
+    
     currentListings.forEach(listing => {
-      if (listing.price < medianPrice) {
-        highlightListing(listing.element);
+      const score = responseJson[listing.id];
+      let color, tooltip;
+
+      if (score === -1) {
+        color = this.scraper.config.highlightColors.potentialScam; // Red for likely scams
+        tooltip = 'Listed price is not true price.';
+      } else if (score <= 40) {
+        color = this.scraper.config.highlightColors.overpriced; // Orange for overpriced
+        tooltip = 'Price is above market value.';
+      } else if (score >= 75) {
+        color = this.scraper.config.highlightColors.goodDeal; // Green for good deals
+        tooltip = 'Price is a good deal!';
+      } else {
+        color = this.scraper.config.highlightColors.neutral; // Gray for neutral
+        tooltip = 'Price is reasonable.';
       }
+
+      highlightListing(listing.element, color, tooltip);
     });
   }
 

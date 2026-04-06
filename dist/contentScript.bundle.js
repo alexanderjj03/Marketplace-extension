@@ -7354,9 +7354,8 @@
 
       try {
         const response = await client.responses.create({
-          model: "gpt-4o-mini",
-          input: prompt,
-          temperature: 0.5
+          model: "gpt-5-mini",
+          input: prompt
         });
 
         return response.output_text.trim();
@@ -7873,17 +7872,34 @@
         const prompt = `Analyze the following Facebook Marketplace listings and determine the quality of each deal. The "other" field is only 
     populated for car listings, in which case it contains the car's mileage in kilometers. Otherwise, it is left blank. Give each listing a score 
     from 1 to 100 based on its pricing relative to the market, taking into account any risks or unknown factors such as condition or demand.
-    If the price is too low to be realistic, assign a score of -1. 
+    If the price is too low to be realistic, assign a score of -1. Assume all prices are in Canadian dollars (CAD).
     Return ONLY a JSON object with the listing ID's as keys and their scores as values:\n\n${relevantInfo}`;
 
         const aiResponse = await callModel(prompt);
         console.log("AI Analysis Response:", aiResponse);
+        const responseJson = JSON.parse(aiResponse);
 
-        const medianPrice = 1000;
+        // NEXT UP: Processing the AI response.
+        
         currentListings.forEach(listing => {
-          if (listing.price < medianPrice) {
-            highlightListing(listing.element);
+          const score = responseJson[listing.id];
+          let color, tooltip;
+
+          if (score === -1) {
+            color = this.scraper.config.highlightColors.potentialScam; // Red for likely scams
+            tooltip = 'Listed price is not true price.';
+          } else if (score <= 40) {
+            color = this.scraper.config.highlightColors.overpriced; // Orange for overpriced
+            tooltip = 'Price is above market value.';
+          } else if (score >= 75) {
+            color = this.scraper.config.highlightColors.goodDeal; // Green for good deals
+            tooltip = 'Price is a good deal!';
+          } else {
+            color = this.scraper.config.highlightColors.neutral; // Gray for neutral
+            tooltip = 'Price is reasonable.';
           }
+
+          highlightListing(listing.element, color, tooltip);
         });
       }
 
@@ -7928,6 +7944,7 @@
       // second button press makes the API call. Save most recent results.
       constructor(config) {
         this.config = config;
+        this.useAI = false;
         this.observer = null;
         this.currentKeyword = "";
         this.allDetectedListings = [];
@@ -7952,7 +7969,7 @@
                 this._pendingScan = true;
                 requestAnimationFrame(() => {
                   this._pendingScan = false;
-                  this.scrapeListingsWithPersistence();
+                  this.scrapeListingsWithPersistence(this.useAI);
                 });
               }
               break;
@@ -8032,20 +8049,33 @@
         // Further analysis for certain cases (e.g. cars, computer parts, properties)
 
         this.addNewListingsToPersistentList(currentListings);
-        this.aIAnalyze(currentListings);
+
+        if (!this.useAI) {
+          this.noAIAnalyze(currentListings);
+        }
       }
 
       // Dedupe & persist newly seen listings
       addNewListingsToPersistentList(newListings) {
-        newListings.forEach((listing) => {
-          if (!this.uniqueListings.has(listing.id)) {
-            this.uniqueListings.add(listing.id);
-            this.allDetectedListings.push({
-              ...listing,
-              detectedAt: Date.now()
-            });
-          }
-        });
+        if (!this.useAI || this.allDetectedListings.length < 50) {
+          newListings.forEach((listing) => {
+            if (!this.uniqueListings.has(listing.id)) {
+              this.uniqueListings.add(listing.id);
+              this.allDetectedListings.push({
+                ...listing,
+                detectedAt: Date.now()
+              });
+
+              if (this.useAI) {
+                highlightListing(listing.element, this.config.highlightColors.detectedListing, "");
+
+                if (this.allDetectedListings.length >= 50) {
+                  return; // Stop adding new listings if we've reached the AI analysis threshold
+                }
+              }
+            }
+          });
+        }
 
         console.log('All detected listings (count):', this.allDetectedListings.length);
         this.updateListingsCounter();
@@ -8059,18 +8089,31 @@
         analyzer.detectPotentialScams();
       }
 
-      aIAnalyze(currentListings) {
+      async aIAnalyze(currentListings) {
         const analyzer1 = new AIAnalyzer(this);
-        analyzer1.analyzeAllListingsPrices(currentListings);
+        if (this.allDetectedListings.length >= 5) {
+          await analyzer1.analyzeAllListingsPrices(currentListings);
+
+          if (this.observer) {
+            this.observer.disconnect();
+            this.observer = null;
+            console.log("Observer disconnected");
+          }
+        }
       }
 
       // Clear data and remove any residual highlights
-      clearPersistentListings() {
+      clearPersistentListings(disableButton = false, confirm = false) {
         if (this.observer) {
           this.observer.disconnect();
           this.observer = null;
           console.log("Observer disconnected");
         }
+
+        const scrapeListingsBtn = document.getElementById('scrape-listings-btn');
+        const useAICheckbox = document.getElementById('use-ai-checkbox');
+        scrapeListingsBtn.textContent = confirm ? "Confirm Analysis" : "Analyze Listing Prices";
+        useAICheckbox.disabled = disableButton;
 
         this.allDetectedListings.forEach(item => resetListingStyle(item.element));
         this.allDetectedListings = [];
@@ -8366,6 +8409,7 @@
 
     let config = { // default config
       highlightColors: {
+        detectedListing: 'rgba(0, 123, 255, 0.2)',
         goodDeal: 'rgba(0,255,0,0.2)',
         neutral: 'rgba(255,255,0,0.2)',
         potentialScam: 'rgba(255,0,0,0.2)',
@@ -8412,7 +8456,40 @@
       scrapeListingsBtn.id = 'scrape-listings-btn';
       scrapeListingsBtn.style.cssText = baseBtnCss() + 'background:#0b5cff;color:#fff;margin-bottom:8px;display:block;';
       overlay.appendChild(scrapeListingsBtn);
-      scrapeListingsBtn.addEventListener('click', scrapeListings);
+
+      const useAICheckbox = document.createElement('input');
+      useAICheckbox.type = 'checkbox';
+      useAICheckbox.id = 'use-ai-checkbox';
+      useAICheckbox.style.marginRight = '6px';
+      overlay.appendChild(useAICheckbox);
+      useAICheckbox.checked = false; // Default to not using AI for analysis
+      useAICheckbox.addEventListener('change', () => {
+        listingListScraper.useAI = useAICheckbox.checked;
+        console.log('Use AI for analysis:', listingListScraper.useAI);
+      });
+      
+      const aiLabel = document.createElement('label');
+      aiLabel.htmlFor = 'use-ai-checkbox';
+      aiLabel.textContent = 'Use AI';
+      aiLabel.style.fontSize = '12px';
+      overlay.appendChild(aiLabel);
+
+      scrapeListingsBtn.addEventListener('click', async () => {
+        if (scrapeListingsBtn.textContent == "Analyze Listing Prices" && listingListScraper.useAI) {
+          scrapeListingsBtn.textContent = "Confirm Analysis";
+          useAICheckbox.disabled = true; // Prevent changing AI option after starting scrape
+          scrapeListings();
+        } else if (scrapeListingsBtn.textContent === "Confirm Analysis") {
+          updateStatus('This will take a moment', 'info');
+          scrapeListingsBtn.textContent = "Analyze Listing Prices";
+          await listingListScraper.aIAnalyze(listingListScraper.allDetectedListings);
+          useAICheckbox.disabled = false; // Re-enable AI option after analysis
+          updateStatus('Analysis complete. Click "Clear list" to start a new search.', 'success');
+        } else {
+          useAICheckbox.disabled = true;
+          scrapeListings();
+        }
+      }); // scrapeListings has logic to handle the checkbox state (useAI) upon execution
 
       const scrapeSingleBtn = document.createElement('button');
       scrapeSingleBtn.textContent = 'Analyze Single Listing';
@@ -8597,13 +8674,12 @@
 
     checkReadyState();
 
-    function scrapeListings() { // Requires: An item has been searched for
+    function preExecutionChecks() {
       const resultsDiv = document.getElementById('analysis-results-container');
       resultsDiv.innerHTML = '';
       resultsDiv.textContent = 'No results available yet.';
       // Clear results first
 
-      let prevKeyword = listingListScraper.currentKeyword;
       let errorMsg;
       console.log('Scrape listings action received');
 
@@ -8632,16 +8708,30 @@
         updateStatus(errorMsg, "error");
         return;
       }
+    }
+
+    function scrapeListings() { // Requires: An item has been searched for and the user is on the search results page.
+      let prevKeyword = listingListScraper.currentKeyword;
+
+      preExecutionChecks();
+
+      const useAI = listingListScraper.useAI;
+
+      let message = "Success! Observer is active. Scroll to load more listings. Click 'clear list' to stop scanning.";
+      if (useAI) {
+        message = message + " Click 'Confirm analysis' to analyze listing prices with AI (maximum: 50 listings).";
+      }
 
       // Clear previous listings when starting a new search
-      if (prevKeyword !== listingListScraper.currentKeyword) {
-        listingListScraper.clearPersistentListings();
+      if (prevKeyword !== listingListScraper.currentKeyword || useAI) {
+        listingListScraper.clearPersistentListings(true, useAI); 
+        // Clear listings and reset AI state if keyword changed or if using AI for new analysis
       }
 
       try {
         listingListScraper.scrapeListingsWithPersistence();
         listingListScraper.observeListings();
-        updateStatus("Success! Observer is active. Scroll to load more listings. Click 'clear list' to stop scanning.", "success");
+        updateStatus(message, "success");
         console.log('All detected listings:', listingListScraper.allDetectedListings);
       } catch (error) {
         console.error('Error scraping listings:', error);

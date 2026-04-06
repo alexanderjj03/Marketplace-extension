@@ -1,4 +1,4 @@
-import {resetListingStyle} from './utils.js';
+import {resetListingStyle, highlightListing} from './utils.js';
 import {noAIAnalyzer} from './noAI_analyze.js';
 import {AIAnalyzer} from './AI_analyze.js';
 
@@ -14,6 +14,7 @@ export class ListingListScraper {
   // second button press makes the API call. Save most recent results.
   constructor(config) {
     this.config = config;
+    this.useAI = false;
     this.observer = null;
     this.currentKeyword = "";
     this.allDetectedListings = [];
@@ -38,7 +39,7 @@ export class ListingListScraper {
             this._pendingScan = true;
             requestAnimationFrame(() => {
               this._pendingScan = false;
-              this.scrapeListingsWithPersistence();
+              this.scrapeListingsWithPersistence(this.useAI);
             });
           }
           break;
@@ -118,20 +119,33 @@ export class ListingListScraper {
     // Further analysis for certain cases (e.g. cars, computer parts, properties)
 
     this.addNewListingsToPersistentList(currentListings);
-    this.aIAnalyze(currentListings);
+
+    if (!this.useAI) {
+      this.noAIAnalyze(currentListings);
+    }
   }
 
   // Dedupe & persist newly seen listings
   addNewListingsToPersistentList(newListings) {
-    newListings.forEach((listing) => {
-      if (!this.uniqueListings.has(listing.id)) {
-        this.uniqueListings.add(listing.id);
-        this.allDetectedListings.push({
-          ...listing,
-          detectedAt: Date.now()
-        });
-      }
-    });
+    if (!this.useAI || this.allDetectedListings.length < 50) {
+      newListings.forEach((listing) => {
+        if (!this.uniqueListings.has(listing.id)) {
+          this.uniqueListings.add(listing.id);
+          this.allDetectedListings.push({
+            ...listing,
+            detectedAt: Date.now()
+          });
+
+          if (this.useAI) {
+            highlightListing(listing.element, this.config.highlightColors.detectedListing, "");
+
+            if (this.allDetectedListings.length >= 50) {
+              return; // Stop adding new listings if we've reached the AI analysis threshold
+            }
+          }
+        }
+      });
+    }
 
     console.log('All detected listings (count):', this.allDetectedListings.length);
     this.updateListingsCounter();
@@ -145,18 +159,31 @@ export class ListingListScraper {
     analyzer.detectPotentialScams();
   }
 
-  aIAnalyze(currentListings) {
+  async aIAnalyze(currentListings) {
     const analyzer1 = new AIAnalyzer(this);
-    analyzer1.analyzeAllListingsPrices(currentListings);
+    if (this.allDetectedListings.length >= 5) {
+      await analyzer1.analyzeAllListingsPrices(currentListings);
+
+      if (this.observer) {
+        this.observer.disconnect();
+        this.observer = null;
+        console.log("Observer disconnected");
+      }
+    }
   }
 
   // Clear data and remove any residual highlights
-  clearPersistentListings() {
+  clearPersistentListings(disableButton = false, confirm = false) {
     if (this.observer) {
       this.observer.disconnect();
       this.observer = null;
       console.log("Observer disconnected");
     }
+
+    const scrapeListingsBtn = document.getElementById('scrape-listings-btn');
+    const useAICheckbox = document.getElementById('use-ai-checkbox');
+    scrapeListingsBtn.textContent = confirm ? "Confirm Analysis" : "Analyze Listing Prices";
+    useAICheckbox.disabled = disableButton;
 
     this.allDetectedListings.forEach(item => resetListingStyle(item.element));
     this.allDetectedListings = [];
