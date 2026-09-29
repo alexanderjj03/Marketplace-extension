@@ -1,4 +1,4 @@
-# Facebook maretplace price checker/potential scam detector (Beta 1.0.0, WORK IN PROGRESS)
+# Facebook maretplace price checker/potential scam detector (Beta 1.0.0, work currently paused due to university)
 
 Beta 1.0.0 is finally ready! We will be sending it out to around 30 people so we can receive feedback and ideas for potential new features.
 
